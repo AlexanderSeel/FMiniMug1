@@ -42,19 +42,20 @@ jobs:
         run: |
           python3 scripts/generate_params.py
           git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts
-      - name: Compile portable DSP, sequencer, app, diagnostics, browser ABI and UI
+      - name: Compile portable DSP, sequencer, Studio, app, diagnostics, browser ABI and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_studio.c -o build/fm_studio.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_app.c -o build/fm_app.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_diag.c -o build/fm_diag.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
       - name: Verify DSP hot path has no libm dependencies
         run: |
-          if nm -u build/fm_voice.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
-            echo 'unexpected libm dependency in firmware/src/fm_voice.c' >&2
+          if nm -u build/fm_voice.o build/fm_studio.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
+            echo 'unexpected libm dependency in portable real-time DSP' >&2
             exit 1
           fi
       - name: Compile-check Felucca target adapter with host HAL stubs
@@ -68,8 +69,6 @@ jobs:
           AUDIO='-DFMM_TARGET_DIAGNOSTIC=0 -DFMM_TARGET_AUDIO_DIAGNOSTIC=1'
           cc -std=c11 -Wall -Wextra -Werror $INC $AUDIO -c firmware/target/felucca/fm1_target_main.c -o build/fm1_target_main_audio.o
 
-          # Synthetic IDs only exercise the verified-map branch. They are NOT
-          # asserted to be the real FM-1 semantic control mapping.
           MAP='-DFMM_BUTTON_MAP_VERIFIED -DFMM_TARGET_DIAGNOSTIC=0 -DFMM_TARGET_AUDIO_DIAGNOSTIC=0 -DFMM_BTN_RAW_OCT_DOWN=0 -DFMM_BTN_RAW_OCT_UP=1 -DFMM_BTN_RAW_PAGE_LEFT=2 -DFMM_BTN_RAW_PAGE_RIGHT=3 -DFMM_BTN_RAW_PRESET=4 -DFMM_BTN_RAW_PATTERN=5 -DFMM_BTN_RAW_PLAY=6 -DFMM_BTN_RAW_HOLD=7 -DFMM_BTN_RAW_ENC1=8 -DFMM_BTN_RAW_ENC2=9 -DFMM_BTN_RAW_ENC3=10 -DFMM_BTN_RAW_ENC4=11 -DFMM_ENC_RAW_1=0 -DFMM_ENC_RAW_2=1 -DFMM_ENC_RAW_3=2 -DFMM_ENC_RAW_4=3'
           cc -std=c11 -Wall -Wextra -Werror $INC $MAP -c firmware/target/felucca/fm1_platform_felucca.c -o build/fm1_platform_felucca_mapped.o
           cc -std=c11 -Wall -Wextra -Werror $INC $MAP -c firmware/target/felucca/fm1_target_main.c -o build/fm1_target_main_mapped.o
@@ -96,5 +95,5 @@ jobs:
           ./build/test_ui
       - name: Run portable application runtime tests
         run: |
-          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_seq.c firmware/src/fm_ui.c firmware/src/fm_app.c tests/test_app.c -o build/test_app
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_seq.c firmware/src/fm_ui.c firmware/src/fm_studio.c firmware/src/fm_app.c tests/test_app.c -o build/test_app
           ./build/test_app
