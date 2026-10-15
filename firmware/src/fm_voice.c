@@ -12,6 +12,11 @@ static float midi_hz(uint8_t n) {
   return 440.0f * powf(2.0f, ((float)n - 69.0f) / 12.0f);
 }
 
+static float range_semitones(uint8_t range) {
+  static const float offsets[5] = {-24.0f, -12.0f, 0.0f, 12.0f, 24.0f};
+  return offsets[range <= FM_RANGE_2 ? range : FM_RANGE_8];
+}
+
 static float fast_tanh(float x) {
   const float x2 = x * x;
   return x * (27.0f + x2) / (27.0f + 9.0f * x2);
@@ -25,6 +30,20 @@ static float rnd(fm_voice_t *v) {
 static float env_coeff(float time_s, float sample_rate) {
   if (time_s <= 0.00001f) return 1.0f;
   return 1.0f - expf(-1.0f / (time_s * sample_rate));
+}
+
+static float envelope_tick(float current, float gate, float attack_s, float decay_s,
+                           float sustain, float release_s, float sample_rate) {
+  if (gate > 0.0f) {
+    if (current < 0.995f) {
+      current += (1.0f - current) * env_coeff(attack_s, sample_rate);
+    } else {
+      current += (clampf(sustain, 0.0f, 1.0f) - current) * env_coeff(decay_s, sample_rate);
+    }
+  } else {
+    current += (0.0f - current) * env_coeff(release_s, sample_rate);
+  }
+  return clampf(current, 0.0f, 1.05f);
 }
 
 /* Standard PolyBLEP correction for a discontinuity at phase 0. */
@@ -57,7 +76,6 @@ static float blep_pulse(float phase, float dt, float duty) {
 static float osc_sample(fm_voice_t *v, int index, fm_wave_t wave, float phase, float dt) {
   switch (wave) {
     case FM_WAVE_TRI: {
-      /* Integrate an anti-aliased square. The small leak prevents DC drift. */
       const float square = blep_pulse(phase, dt, 0.5f);
       v->tri_state[index] += square * (4.0f * dt);
       v->tri_state[index] *= 1.0f - clampf(dt * 0.5f, 0.0f, 0.01f);
@@ -74,21 +92,12 @@ static float osc_sample(fm_voice_t *v, int index, fm_wave_t wave, float phase, f
 }
 
 static void update_envelopes(fm_voice_t *v, float sr) {
-  if (v->gate > 0.0f) {
-    const float a = env_coeff(v->patch.attack_s, sr);
-    const float d = env_coeff(v->patch.decay_s, sr);
-    if (v->env_amp < 0.995f) {
-      v->env_amp += (1.0f - v->env_amp) * a;
-      v->env_filter += (1.0f - v->env_filter) * a;
-    } else {
-      v->env_amp += (v->patch.sustain - v->env_amp) * d;
-      v->env_filter += (v->patch.sustain - v->env_filter) * d;
-    }
-  } else {
-    const float r = env_coeff(v->patch.release_s, sr);
-    v->env_amp += (0.0f - v->env_amp) * r;
-    v->env_filter += (0.0f - v->env_filter) * r;
-  }
+  v->env_amp = envelope_tick(v->env_amp, v->gate,
+                             v->patch.attack_s, v->patch.decay_s,
+                             v->patch.sustain, v->patch.release_s, sr);
+  v->env_filter = envelope_tick(v->env_filter, v->gate,
+                                v->patch.filter_attack_s, v->patch.filter_decay_s,
+                                v->patch.filter_sustain, v->patch.filter_release_s, sr);
 }
 
 static float ladder_tick(fm_voice_t *v, float input, float cutoff_hz, float sub_sr) {
@@ -106,7 +115,6 @@ static float ladder_tick(fm_voice_t *v, float input, float cutoff_hz, float sub_
     v->ladder[i] += a * (target - state);
   }
 
-  /* Compensate some of the classic ladder bass loss as resonance rises. */
   return v->ladder[3] * (1.0f + 0.18f * resonance);
 }
 
@@ -121,27 +129,41 @@ void fm_voice_init(fm_voice_t *v, float sample_rate) {
   v->patch.decay_s = 0.3f;
   v->patch.sustain = 0.6f;
   v->patch.release_s = 0.25f;
+  v->patch.filter_attack_s = 0.005f;
+  v->patch.filter_decay_s = 0.3f;
+  v->patch.filter_sustain = 0.6f;
+  v->patch.filter_release_s = 0.25f;
   v->patch.mixer_drive = 1.4f;
   v->patch.filter_drive = 1.1f;
   v->patch.filter_keytrack = 0;
   v->patch.oversample_2x = 1;
+  v->patch.retrigger = 0;
   for (int i = 0; i < 3; ++i) {
     v->patch.osc[i].wave = FM_WAVE_SAW;
     v->patch.osc[i].level = i == 0 ? 0.8f : 0.35f;
     v->patch.osc[i].keyboard_track = 1;
+    v->patch.osc[i].range = FM_RANGE_8;
   }
 }
 
 void fm_voice_set_patch(fm_voice_t *v, const fm_patch_t *p) {
   v->patch = *p;
+  for (int i = 0; i < 3; ++i) {
+    if (v->patch.osc[i].range > FM_RANGE_2) v->patch.osc[i].range = FM_RANGE_8;
+  }
 }
 
 void fm_voice_note_on(fm_voice_t *v, uint8_t note, uint8_t velocity) {
   const float base = midi_hz(note);
+  const int was_gated = v->gate > 0.0f;
   v->current_note = note;
+  if (was_gated && v->patch.retrigger) {
+    v->env_amp = 0.0f;
+    v->env_filter = 0.0f;
+  }
   for (int i = 0; i < 3; ++i) {
     const fm_osc_params_t *o = &v->patch.osc[i];
-    const float st = o->coarse_semitones + o->fine_cents / 100.0f;
+    const float st = range_semitones(o->range) + o->coarse_semitones + o->fine_cents / 100.0f;
     v->target_freq[i] = (o->keyboard_track ? base : 440.0f) * powf(2.0f, st / 12.0f);
     if (o->low_mode) v->target_freq[i] *= 0.01f;
     if (v->freq[i] <= 0.0f) v->freq[i] = v->target_freq[i];
