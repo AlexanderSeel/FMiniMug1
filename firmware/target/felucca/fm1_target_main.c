@@ -21,16 +21,6 @@
 #error "Normal synth target requires FMM_BUTTON_MAP_VERIFIED after real-device diagnostics"
 #endif
 
-static void u32_text(char *dst, unsigned size, uint32_t value) {
-  char tmp[11];
-  unsigned n = 0u;
-  if (!size) return;
-  do { tmp[n++] = (char)('0' + value % 10u); value /= 10u; } while (value && n < sizeof(tmp));
-  unsigned p = 0u;
-  while (n && p + 1u < size) dst[p++] = tmp[--n];
-  dst[p] = 0;
-}
-
 #if FMM_TARGET_DIAGNOSTIC
 static void run_diagnostic(void) {
   fm1_input_frame_t input;
@@ -55,6 +45,16 @@ static void render_audio_irq(fm1_audio_block_t *block, void *user) {
 }
 
 #if FMM_TARGET_AUDIO_DIAGNOSTIC
+static void u32_text(char *dst, unsigned size, uint32_t value) {
+  char tmp[11];
+  unsigned n = 0u;
+  if (!size) return;
+  do { tmp[n++] = (char)('0' + value % 10u); value /= 10u; } while (value && n < sizeof(tmp));
+  unsigned p = 0u;
+  while (n && p + 1u < size) dst[p++] = tmp[--n];
+  dst[p] = 0;
+}
+
 static void render_audio_budget_screen(uint8_t oversample, const fm1_felucca_audio_stats_t *stats) {
   char value[12];
   uint32_t shown = stats->max_ticks;
@@ -85,7 +85,7 @@ static void render_audio_budget_screen(uint8_t oversample, const fm1_felucca_aud
 
   fm1_platform_lcd_rect(8, 178, 220, 12, 0x2104u);
   if (width > 0) fm1_platform_lcd_rect(8, 178, width, 12, stats->max_ticks > FMM_AUDIO_HALF_BUDGET_TICKS ? warn : ok);
-  fm1_platform_lcd_rect(118, 174, 2, 20, accent); /* 100% DMA budget marker */
+  fm1_platform_lcd_rect(118, 174, 2, 20, accent);
   fm1_platform_lcd_text(8, 204, "AUTO SWITCH 1X/2X EACH 5S", 0x8410u);
   fm1_platform_lcd_text(8, 220, "OVER MUST STAY 0", stats->over_budget_count ? warn : ok);
   fm1_platform_lcd_present();
