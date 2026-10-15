@@ -60,7 +60,7 @@ def run(cmd: list[str], *, capture: bool = False) -> str:
 
 
 def find_softfloat_runtime(toolchain: Path) -> Path:
-    """Find an archive containing the pi32v2 soft-float helper symbol.
+    """Find the pi32v2 archive containing the soft-float helper symbol.
 
     JieLi toolchain layouts vary and some bundles omit nm. Archive symbol names
     are stored as ASCII in the ar/object data, so matching __subsf3 in bytes is
@@ -79,6 +79,9 @@ def find_softfloat_runtime(toolchain: Path) -> Path:
             candidates.append(archive)
             seen.add(archive)
 
+    # Never pick the older pi32 ABI merely because its archive appears first.
+    # Prefer a runtime physically shipped under the pi32v2 subtree.
+    candidates.sort(key=lambda p: (0 if "pi32v2" in p.parts else 1, str(p)))
     needle = b"__subsf3"
     for archive in candidates:
         try:
