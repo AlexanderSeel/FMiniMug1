@@ -18,6 +18,13 @@ static fm_wave_t wave_from_number(float v) {
     return FM_WAVE_PULSE;
 }
 
+static uint8_t range_from_number(float v) {
+    int n = (int)v;
+    if (n < FM_RANGE_32) n = FM_RANGE_32;
+    if (n > FM_RANGE_2) n = FM_RANGE_2;
+    return (uint8_t)n;
+}
+
 static void sequence_event(const fm_seq_event_t *event, void *user) {
     (void)user;
     if (event->type == FM_SEQ_EVENT_NOTE_ON) fm_voice_note_on(&voice, event->note, event->velocity);
@@ -66,6 +73,14 @@ void fmm_set_param(int id, float value) {
         case FMM_FEEDBACK: voice.patch.feedback = value; break;
         case FMM_FILTER_KEYTRACK: voice.patch.filter_keytrack = (uint8_t)value; break;
         case FMM_OVERSAMPLE_2X: voice.patch.oversample_2x = value >= 0.5f; break;
+        case FMM_OSC1_RANGE: voice.patch.osc[0].range = range_from_number(value); break;
+        case FMM_OSC2_RANGE: voice.patch.osc[1].range = range_from_number(value); break;
+        case FMM_OSC3_RANGE: voice.patch.osc[2].range = range_from_number(value); break;
+        case FMM_FILTER_ATTACK: voice.patch.filter_attack_s = value; break;
+        case FMM_FILTER_DECAY: voice.patch.filter_decay_s = value; break;
+        case FMM_FILTER_SUSTAIN: voice.patch.filter_sustain = value; break;
+        case FMM_FILTER_RELEASE: voice.patch.filter_release_s = value; break;
+        case FMM_RETRIGGER: voice.patch.retrigger = value >= 0.5f; break;
         case FMM_PARAM_COUNT: break;
     }
 }
