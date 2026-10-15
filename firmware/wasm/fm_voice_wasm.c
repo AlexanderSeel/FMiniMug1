@@ -1,11 +1,12 @@
 #include "fm_voice.h"
+#include "fm_seq.h"
 #include "fm_params.h"
 #include <stdint.h>
 
-/* Small stable ABI used by the browser AudioWorklet. Keep this wrapper dumb:
- * all synthesis stays in fm_voice.c so host, browser and FM-1 exercise the same DSP.
- */
+/* Stable browser ABI. Synthesis and sequencer timing remain in portable C so
+ * browser and FM-1 can share the same oscillator/filter/envelope/clock path. */
 static fm_voice_t voice;
+static fm_seq_t sequencer;
 static float output[128];
 static int initialized;
 
@@ -17,9 +18,16 @@ static fm_wave_t wave_from_number(float v) {
     return FM_WAVE_PULSE;
 }
 
+static void sequence_event(const fm_seq_event_t *event, void *user) {
+    (void)user;
+    if (event->type == FM_SEQ_EVENT_NOTE_ON) fm_voice_note_on(&voice, event->note, event->velocity);
+    else if (event->type == FM_SEQ_EVENT_NOTE_OFF) fm_voice_note_off(&voice);
+}
+
 __attribute__((visibility("default")))
 void fmm_init(float sample_rate) {
     fm_voice_init(&voice, sample_rate);
+    fm_seq_init(&sequencer, sample_rate);
     initialized = 1;
 }
 
@@ -27,6 +35,7 @@ __attribute__((visibility("default")))
 void fmm_reset(void) {
     float sr = voice.sample_rate > 1000.0f ? voice.sample_rate : 48000.0f;
     fm_voice_init(&voice, sr);
+    fm_seq_init(&sequencer, sr);
     initialized = 1;
 }
 
@@ -77,10 +86,81 @@ void fmm_note_off(void) {
 }
 
 __attribute__((visibility("default")))
+void fmm_seq_clear(void) {
+    if (!initialized) fmm_init(48000.0f);
+    fm_seq_pattern_t p;
+    p.length = 16u;
+    p.bpm = 120u;
+    p.swing = 0u;
+    for (uint8_t i = 0; i < FM_SEQ_MAX_STEPS; ++i) {
+        p.steps[i].note = -1;
+        p.steps[i].transpose = 0;
+        p.steps[i].velocity = 100u;
+        p.steps[i].gate_percent = 70u;
+        p.steps[i].flags = 0u;
+    }
+    fm_seq_set_pattern(&sequencer, &p);
+}
+
+__attribute__((visibility("default")))
+void fmm_seq_set_meta(int length, int bpm, int swing) {
+    if (!initialized) fmm_init(48000.0f);
+    if (length < 1) length = 1;
+    if (length > (int)FM_SEQ_MAX_STEPS) length = FM_SEQ_MAX_STEPS;
+    if (bpm < 40) bpm = 40;
+    if (bpm > 300) bpm = 300;
+    if (swing < 0) swing = 0;
+    if (swing > 100) swing = 100;
+    sequencer.pattern.length = (uint8_t)length;
+    sequencer.pattern.bpm = (uint16_t)bpm;
+    sequencer.pattern.swing = (uint8_t)swing;
+}
+
+__attribute__((visibility("default")))
+void fmm_seq_set_step(int index, int note, int transpose, int velocity, int gate_percent, int flags) {
+    if (!initialized) fmm_init(48000.0f);
+    if (index < 0 || index >= (int)FM_SEQ_MAX_STEPS) return;
+    if (note < -1) note = -1;
+    if (note > 127) note = 127;
+    if (transpose < -48) transpose = -48;
+    if (transpose > 48) transpose = 48;
+    if (velocity < 1) velocity = 1;
+    if (velocity > 127) velocity = 127;
+    if (gate_percent < 1) gate_percent = 1;
+    if (gate_percent > 100) gate_percent = 100;
+    fm_seq_step_t *step = &sequencer.pattern.steps[index];
+    step->note = (int8_t)note;
+    step->transpose = (int8_t)transpose;
+    step->velocity = (uint8_t)velocity;
+    step->gate_percent = (uint8_t)gate_percent;
+    step->flags = (uint8_t)flags;
+}
+
+__attribute__((visibility("default")))
+void fmm_seq_start(void) {
+    if (!initialized) fmm_init(48000.0f);
+    fm_seq_start(&sequencer);
+}
+
+__attribute__((visibility("default")))
+void fmm_seq_stop(void) {
+    fm_seq_stop(&sequencer);
+    fm_voice_note_off(&voice);
+}
+
+__attribute__((visibility("default")))
+int fmm_seq_step(void) {
+    return (int)sequencer.step_index;
+}
+
+__attribute__((visibility("default")))
 uintptr_t fmm_render(int frames) {
     if (!initialized) fmm_init(48000.0f);
     if (frames < 0) frames = 0;
     if (frames > 128) frames = 128;
-    for (int i = 0; i < frames; ++i) output[i] = fm_voice_process(&voice);
+    for (int i = 0; i < frames; ++i) {
+        fm_seq_process(&sequencer, 1u, sequence_event, 0);
+        output[i] = fm_voice_process(&voice);
+    }
     return (uintptr_t)output;
 }
