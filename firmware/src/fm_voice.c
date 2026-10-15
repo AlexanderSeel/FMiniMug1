@@ -215,7 +215,9 @@ void fm_voice_note_on(fm_voice_t *v, uint8_t note, uint8_t velocity) {
 
   const int selected = select_held_note(v);
   const int changed = selected >= 0 && (uint8_t)selected != v->current_note;
-  if (!was_gated || changed) {
+  if (selected >= 0) {
+    /* Always recompute pitch targets so range/tuning changes take effect on a
+     * repeated note-on. Only a true selected-note transition can retrigger. */
     retarget_note(v, (uint8_t)selected, was_gated && changed && v->patch.retrigger);
   }
   v->velocity = clampf((float)velocity / 127.0f, 0.05f, 1.0f);
