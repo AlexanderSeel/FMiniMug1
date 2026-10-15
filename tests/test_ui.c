@@ -50,6 +50,15 @@ int main(void) {
   fm_ui_handle_input(&ui, &patch, &input);
   assert(patch.osc[0].range == range_before + 1u);
 
+  /* HOLD + encoder 4 press toggles constant-time / constant-rate glide. */
+  assert(patch.glide_mode == FM_GLIDE_TIME);
+  memset(&input, 0, sizeof(input));
+  input.buttons = bit(FM1_KEY_HOLD);
+  input.button_pressed = bit(FM1_KEY_ENCODER_4);
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(patch.glide_mode == FM_GLIDE_RATE);
+  assert(ui.focus_encoder == -1);
+
   memset(&input, 0, sizeof(input));
   input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
   fm_ui_handle_input(&ui, &patch, &input);
@@ -88,6 +97,17 @@ int main(void) {
   fm_ui_handle_input(&ui, &patch, &input);
   assert(patch.attack_s == amp_attack);
   assert(patch.filter_attack_s > filter_attack);
+
+  /* HOLD+E2 press links filter release to decay; HOLD+E3 does loudness. */
+  assert(patch.filter_decay_switch == 0u);
+  assert(patch.amp_decay_switch == 0u);
+  memset(&input, 0, sizeof(input));
+  input.buttons = bit(FM1_KEY_HOLD);
+  input.button_pressed = bit(FM1_KEY_ENCODER_2) | bit(FM1_KEY_ENCODER_3);
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(patch.filter_decay_switch == 1u);
+  assert(patch.amp_decay_switch == 1u);
+  assert(ui.focus_encoder == -1);
 
   /* MOD HOLD exposes note-priority on encoder 1 and retrigger on encoder 4. */
   memset(&input, 0, sizeof(input));
