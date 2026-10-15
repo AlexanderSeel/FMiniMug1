@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "parameters": [
+    {"id":0,"c":"FMM_OSC1_LEVEL","ts":"osc1Level"},
+    {"id":1,"c":"FMM_OSC2_LEVEL","ts":"osc2Level"},
+    {"id":2,"c":"FMM_OSC3_LEVEL","ts":"osc3Level"},
+    {"id":3,"c":"FMM_OSC1_WAVE","ts":"osc1Wave"},
+    {"id":4,"c":"FMM_OSC2_WAVE","ts":"osc2Wave"},
+    {"id":5,"c":"FMM_OSC3_WAVE","ts":"osc3Wave"},
+    {"id":6,"c":"FMM_OSC1_SEMITONES","ts":"osc1Semi"},
+    {"id":7,"c":"FMM_OSC2_SEMITONES","ts":"osc2Semi"},
+    {"id":8,"c":"FMM_OSC3_SEMITONES","ts":"osc3Semi"},
+    {"id":9,"c":"FMM_CUTOFF_HZ","ts":"cutoff"},
+    {"id":10,"c":"FMM_RESONANCE","ts":"res"},
+    {"id":11,"c":"FMM_FILTER_ENV","ts":"env"},
+    {"id":12,"c":"FMM_ATTACK","ts":"attack"},
+    {"id":13,"c":"FMM_DECAY","ts":"decay"},
+    {"id":14,"c":"FMM_SUSTAIN","ts":"sustain"},
+    {"id":15,"c":"FMM_RELEASE","ts":"release"},
+    {"id":16,"c":"FMM_GLIDE","ts":"glide"},
+    {"id":17,"c":"FMM_MIXER_DRIVE","ts":"mixerDrive"},
+    {"id":18,"c":"FMM_FILTER_DRIVE","ts":"filterDrive"},
+    {"id":19,"c":"FMM_DRIFT","ts":"drift"},
+    {"id":20,"c":"FMM_FEEDBACK","ts":"feedback"},
+    {"id":21,"c":"FMM_FILTER_KEYTRACK","ts":"keytrack"},
+    {"id":22,"c":"FMM_OVERSAMPLE_2X","ts":"oversample"}
+  ]
+}
