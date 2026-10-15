@@ -1,5 +1,4 @@
 #include "fm_ui.h"
-#include <stdio.h>
 #include <string.h>
 
 #define COL_BG 0x1082u
@@ -19,6 +18,70 @@ static int pressed(const fm1_input_frame_t *in, fm1_button_t b) {
 
 static int down(const fm1_input_frame_t *in, fm1_button_t b) {
   return (in->buttons & (1u << (unsigned)b)) != 0;
+}
+
+typedef struct {
+  char *p;
+  char *end;
+} fmt_buf_t;
+
+static void fmt_put(fmt_buf_t *b, char c) {
+  if (b->p + 1 < b->end) *b->p++ = c;
+}
+
+static void fmt_text_put(fmt_buf_t *b, const char *s) {
+  while (*s) fmt_put(b, *s++);
+}
+
+static void fmt_done(fmt_buf_t *b) {
+  if (b->p < b->end) *b->p = 0;
+  else if (b->end) b->end[-1] = 0;
+}
+
+static void fmt_uint_put(fmt_buf_t *b, unsigned v, unsigned min_digits) {
+  char tmp[12];
+  unsigned n = 0;
+  do { tmp[n++] = (char)('0' + v % 10u); v /= 10u; } while (v && n < sizeof(tmp));
+  while (n < min_digits && n < sizeof(tmp)) tmp[n++] = '0';
+  while (n) fmt_put(b, tmp[--n]);
+}
+
+static void fmt_text(char *dst, unsigned size, const char *s) {
+  fmt_buf_t b = {dst, dst + size};
+  fmt_text_put(&b, s);
+  fmt_done(&b);
+}
+
+static void fmt_uint(char *dst, unsigned size, unsigned v, unsigned min_digits, const char *suffix) {
+  fmt_buf_t b = {dst, dst + size};
+  fmt_uint_put(&b, v, min_digits);
+  fmt_text_put(&b, suffix);
+  fmt_done(&b);
+}
+
+static void fmt_int(char *dst, unsigned size, int v, int plus, const char *suffix) {
+  fmt_buf_t b = {dst, dst + size};
+  if (v < 0) { fmt_put(&b, '-'); v = -v; }
+  else if (plus) fmt_put(&b, '+');
+  fmt_uint_put(&b, (unsigned)v, 1u);
+  fmt_text_put(&b, suffix);
+  fmt_done(&b);
+}
+
+static void fmt_fixed(char *dst, unsigned size, float value, unsigned decimals, int plus, const char *suffix) {
+  static const unsigned pow10[] = {1u, 10u, 100u, 1000u};
+  const unsigned scale = pow10[decimals <= 3u ? decimals : 3u];
+  fmt_buf_t b = {dst, dst + size};
+  if (value < 0.0f) { fmt_put(&b, '-'); value = -value; }
+  else if (plus) fmt_put(&b, '+');
+  const unsigned scaled = (unsigned)(value * (float)scale + 0.5f);
+  fmt_uint_put(&b, scaled / scale, 1u);
+  if (decimals) {
+    fmt_put(&b, '.');
+    fmt_uint_put(&b, scaled % scale, decimals);
+  }
+  fmt_text_put(&b, suffix);
+  fmt_done(&b);
 }
 
 static uint8_t adjust_range(uint8_t range, int delta) {
@@ -54,15 +117,13 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
       if (enc < 3) {
         if (ui->hold) p->osc[enc].range = adjust_range(p->osc[enc].range, delta);
         else p->osc[enc].level = clampf(p->osc[enc].level + delta * 0.015f, 0.0f, 1.0f);
-      } else {
-        p->glide_s = clampf(p->glide_s + delta * 0.005f * fine, 0.0f, 2.0f);
-      }
+      } else p->glide_s = clampf(p->glide_s + delta * 0.005f * fine, 0.0f, 2.0f);
       break;
     case FM_UI_MIX:
       if (enc == 0) p->mixer_drive = clampf(p->mixer_drive + delta * 0.04f * fine, 0.5f, 4.0f);
       if (enc == 1) p->feedback = clampf(p->feedback + delta * 0.02f * fine, 0.0f, 1.0f);
-      if (enc == 2) p->osc[1].fine_cents = clampf(p->osc[1].fine_cents + delta * 1.0f * fine, -100.0f, 100.0f);
-      if (enc == 3) p->osc[2].fine_cents = clampf(p->osc[2].fine_cents + delta * 1.0f * fine, -100.0f, 100.0f);
+      if (enc == 2) p->osc[1].fine_cents = clampf(p->osc[1].fine_cents + delta * fine, -100.0f, 100.0f);
+      if (enc == 3) p->osc[2].fine_cents = clampf(p->osc[2].fine_cents + delta * fine, -100.0f, 100.0f);
       break;
     case FM_UI_FILTER:
       if (enc == 0) p->cutoff_hz = clampf(p->cutoff_hz + delta * 35.0f * fine, 20.0f, 18000.0f);
@@ -94,8 +155,8 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
         if (v > 3) v = 3;
         p->filter_keytrack = (uint8_t)v;
       }
-      if (enc == 2 && delta != 0) p->osc[2].low_mode = (uint8_t)!p->osc[2].low_mode;
-      if (enc == 3 && delta != 0) {
+      if (enc == 2) p->osc[2].low_mode = (uint8_t)!p->osc[2].low_mode;
+      if (enc == 3) {
         if (ui->hold) p->retrigger = (uint8_t)!p->retrigger;
         else p->osc[2].keyboard_track = (uint8_t)!p->osc[2].keyboard_track;
       }
@@ -110,8 +171,7 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
       if (enc == 1) ui->pattern_index = (uint8_t)(ui->pattern_index + delta);
       if (enc == 2) ui->preset_index = (uint8_t)(ui->preset_index + delta);
       break;
-    default:
-      break;
+    default: break;
   }
 }
 
@@ -140,7 +200,7 @@ static void draw_filter_graph(const fm_patch_t *p) {
     else {
       float t = (x - cut) / (1.0f - cut);
       amp = 0.72f * (1.0f - t);
-      amp *= (1.0f - 0.65f * t);
+      amp *= 1.0f - 0.65f * t;
     }
     float d = x - cut;
     if (d < 0.0f) d = -d;
@@ -198,23 +258,13 @@ void fm_ui_init(fm_ui_state_t *ui) {
 
 void fm_ui_handle_input(fm_ui_state_t *ui, fm_patch_t *patch, const fm1_input_frame_t *input) {
   ui->hold = (uint8_t)down(input, FM1_KEY_HOLD);
-
-  if (pressed(input, FM1_KEY_PAGE_LEFT)) {
-    ui->page = (fm_ui_page_t)((ui->page + FM_UI_PAGE_COUNT - 1) % FM_UI_PAGE_COUNT);
-    ui->focus_encoder = -1;
-  }
-  if (pressed(input, FM1_KEY_PAGE_RIGHT)) {
-    ui->page = (fm_ui_page_t)((ui->page + 1) % FM_UI_PAGE_COUNT);
-    ui->focus_encoder = -1;
-  }
+  if (pressed(input, FM1_KEY_PAGE_LEFT)) { ui->page = (fm_ui_page_t)((ui->page + FM_UI_PAGE_COUNT - 1) % FM_UI_PAGE_COUNT); ui->focus_encoder = -1; }
+  if (pressed(input, FM1_KEY_PAGE_RIGHT)) { ui->page = (fm_ui_page_t)((ui->page + 1) % FM_UI_PAGE_COUNT); ui->focus_encoder = -1; }
   if (pressed(input, FM1_KEY_PLAY)) ui->playing = (uint8_t)!ui->playing;
   if (pressed(input, FM1_KEY_PRESET)) ++ui->preset_index;
   if (pressed(input, FM1_KEY_PATTERN)) ++ui->pattern_index;
-
   for (int i = 0; i < 4; ++i) {
-    if (pressed(input, (fm1_button_t)(FM1_KEY_ENCODER_1 + i))) {
-      ui->focus_encoder = ui->focus_encoder == i ? -1 : (int8_t)i;
-    }
+    if (pressed(input, (fm1_button_t)(FM1_KEY_ENCODER_1 + i))) ui->focus_encoder = ui->focus_encoder == i ? -1 : (int8_t)i;
     adjust_patch(ui, patch, i, input->encoder_delta[i]);
   }
 }
@@ -227,63 +277,62 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
     case FM_UI_OSC:
       if (ui->hold) {
         label[0] = "OSC1 RNG"; label[1] = "OSC2 RNG"; label[2] = "OSC3 RNG"; label[3] = "GLIDE FINE";
-        snprintf(value[0], sizeof(value[0]), "%s", range_name(p->osc[0].range));
-        snprintf(value[1], sizeof(value[1]), "%s", range_name(p->osc[1].range));
-        snprintf(value[2], sizeof(value[2]), "%s", range_name(p->osc[2].range));
-        snprintf(value[3], sizeof(value[3]), "%.3fs", p->glide_s);
+        fmt_text(value[0], sizeof(value[0]), range_name(p->osc[0].range));
+        fmt_text(value[1], sizeof(value[1]), range_name(p->osc[1].range));
+        fmt_text(value[2], sizeof(value[2]), range_name(p->osc[2].range));
+        fmt_fixed(value[3], sizeof(value[3]), p->glide_s, 3u, 0, "s");
       } else {
         label[0] = "OSC 1"; label[1] = "OSC 2"; label[2] = "OSC 3"; label[3] = "GLIDE";
-        snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->osc[0].level * 100));
-        snprintf(value[1], sizeof(value[1]), "%d%%", (int)(p->osc[1].level * 100));
-        snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->osc[2].level * 100));
-        snprintf(value[3], sizeof(value[3]), "%.2fs", p->glide_s);
+        fmt_int(value[0], sizeof(value[0]), (int)(p->osc[0].level * 100.0f), 0, "%");
+        fmt_int(value[1], sizeof(value[1]), (int)(p->osc[1].level * 100.0f), 0, "%");
+        fmt_int(value[2], sizeof(value[2]), (int)(p->osc[2].level * 100.0f), 0, "%");
+        fmt_fixed(value[3], sizeof(value[3]), p->glide_s, 2u, 0, "s");
       }
       break;
     case FM_UI_MIX:
       label[0] = "DRIVE"; label[1] = "FEEDBACK"; label[2] = "OSC2 FINE"; label[3] = "OSC3 FINE";
-      snprintf(value[0], sizeof(value[0]), "%.2fx", p->mixer_drive);
-      snprintf(value[1], sizeof(value[1]), "%d%%", (int)(p->feedback * 100));
-      snprintf(value[2], sizeof(value[2]), "%+.0fc", p->osc[1].fine_cents);
-      snprintf(value[3], sizeof(value[3]), "%+.0fc", p->osc[2].fine_cents);
+      fmt_fixed(value[0], sizeof(value[0]), p->mixer_drive, 2u, 0, "x");
+      fmt_int(value[1], sizeof(value[1]), (int)(p->feedback * 100.0f), 0, "%");
+      fmt_fixed(value[2], sizeof(value[2]), p->osc[1].fine_cents, 0u, 1, "c");
+      fmt_fixed(value[3], sizeof(value[3]), p->osc[2].fine_cents, 0u, 1, "c");
       break;
     case FM_UI_FILTER:
       label[0] = "CUTOFF"; label[1] = "EMPHASIS"; label[2] = "CONTOUR"; label[3] = "DRIVE";
-      snprintf(value[0], sizeof(value[0]), "%.0fHz", p->cutoff_hz);
-      snprintf(value[1], sizeof(value[1]), "%d%%", (int)(p->resonance * 100));
-      snprintf(value[2], sizeof(value[2]), "%+.0f", p->filter_env_amount);
-      snprintf(value[3], sizeof(value[3]), "%.2fx", p->filter_drive);
+      fmt_fixed(value[0], sizeof(value[0]), p->cutoff_hz, 0u, 0, "Hz");
+      fmt_int(value[1], sizeof(value[1]), (int)(p->resonance * 100.0f), 0, "%");
+      fmt_fixed(value[2], sizeof(value[2]), p->filter_env_amount, 0u, 1, "");
+      fmt_fixed(value[3], sizeof(value[3]), p->filter_drive, 2u, 0, "x");
       break;
     case FM_UI_CONTOUR:
       if (ui->hold) {
         label[0] = "F ATTACK"; label[1] = "F DECAY"; label[2] = "F SUSTAIN"; label[3] = "F RELEASE";
-        snprintf(value[0], sizeof(value[0]), "%.2fs", p->filter_attack_s);
-        snprintf(value[1], sizeof(value[1]), "%.2fs", p->filter_decay_s);
-        snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->filter_sustain * 100));
-        snprintf(value[3], sizeof(value[3]), "%.2fs", p->filter_release_s);
+        fmt_fixed(value[0], sizeof(value[0]), p->filter_attack_s, 2u, 0, "s");
+        fmt_fixed(value[1], sizeof(value[1]), p->filter_decay_s, 2u, 0, "s");
+        fmt_int(value[2], sizeof(value[2]), (int)(p->filter_sustain * 100.0f), 0, "%");
+        fmt_fixed(value[3], sizeof(value[3]), p->filter_release_s, 2u, 0, "s");
       } else {
         label[0] = "A ATTACK"; label[1] = "A DECAY"; label[2] = "A SUSTAIN"; label[3] = "A RELEASE";
-        snprintf(value[0], sizeof(value[0]), "%.2fs", p->attack_s);
-        snprintf(value[1], sizeof(value[1]), "%.2fs", p->decay_s);
-        snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->sustain * 100));
-        snprintf(value[3], sizeof(value[3]), "%.2fs", p->release_s);
+        fmt_fixed(value[0], sizeof(value[0]), p->attack_s, 2u, 0, "s");
+        fmt_fixed(value[1], sizeof(value[1]), p->decay_s, 2u, 0, "s");
+        fmt_int(value[2], sizeof(value[2]), (int)(p->sustain * 100.0f), 0, "%");
+        fmt_fixed(value[3], sizeof(value[3]), p->release_s, 2u, 0, "s");
       }
       break;
     case FM_UI_MOD:
-      label[0] = ui->hold ? "PRIORITY" : "DRIFT";
-      label[1] = "KEY TRACK"; label[2] = "OSC3 LO"; label[3] = ui->hold ? "RETRIGGER" : "OSC3 KBD";
-      if (ui->hold) snprintf(value[0], sizeof(value[0]), "%s", priority_name(p->note_priority));
-      else snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->drift * 100));
-      snprintf(value[1], sizeof(value[1]), "%s", p->filter_keytrack == 0 ? "OFF" : p->filter_keytrack == 1 ? "1/3" : p->filter_keytrack == 2 ? "2/3" : "FULL");
-      snprintf(value[2], sizeof(value[2]), "%s", p->osc[2].low_mode ? "ON" : "OFF");
-      snprintf(value[3], sizeof(value[3]), "%s", ui->hold ? (p->retrigger ? "ON" : "LEGATO") : (p->osc[2].keyboard_track ? "ON" : "OFF"));
+      label[0] = ui->hold ? "PRIORITY" : "DRIFT"; label[1] = "KEY TRACK"; label[2] = "OSC3 LO"; label[3] = ui->hold ? "RETRIGGER" : "OSC3 KBD";
+      if (ui->hold) fmt_text(value[0], sizeof(value[0]), priority_name(p->note_priority));
+      else fmt_int(value[0], sizeof(value[0]), (int)(p->drift * 100.0f), 0, "%");
+      fmt_text(value[1], sizeof(value[1]), p->filter_keytrack == 0 ? "OFF" : p->filter_keytrack == 1 ? "1/3" : p->filter_keytrack == 2 ? "2/3" : "FULL");
+      fmt_text(value[2], sizeof(value[2]), p->osc[2].low_mode ? "ON" : "OFF");
+      fmt_text(value[3], sizeof(value[3]), ui->hold ? (p->retrigger ? "ON" : "LEGATO") : (p->osc[2].keyboard_track ? "ON" : "OFF"));
       break;
     case FM_UI_SEQ:
     default:
       label[0] = "TEMPO"; label[1] = "PATTERN"; label[2] = "PRESET"; label[3] = "TRANSPORT";
-      snprintf(value[0], sizeof(value[0]), "%u BPM", ui->tempo_bpm);
-      snprintf(value[1], sizeof(value[1]), "%02u", ui->pattern_index + 1u);
-      snprintf(value[2], sizeof(value[2]), "%02u", ui->preset_index + 1u);
-      snprintf(value[3], sizeof(value[3]), "%s", ui->playing ? "PLAY" : "STOP");
+      fmt_uint(value[0], sizeof(value[0]), ui->tempo_bpm, 1u, " BPM");
+      fmt_uint(value[1], sizeof(value[1]), ui->pattern_index + 1u, 2u, "");
+      fmt_uint(value[2], sizeof(value[2]), ui->preset_index + 1u, 2u, "");
+      fmt_text(value[3], sizeof(value[3]), ui->playing ? "PLAY" : "STOP");
       break;
   }
 
