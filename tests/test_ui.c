@@ -42,6 +42,14 @@ int main(void) {
   fm_ui_handle_input(&ui, &patch, &input);
   assert(patch.osc[0].level > voice.patch.osc[0].level);
 
+  /* HOLD on OSC switches encoder 1..3 to classic range selectors. */
+  const uint8_t range_before = patch.osc[0].range;
+  memset(&input, 0, sizeof(input));
+  input.buttons = bit(FM1_KEY_HOLD);
+  input.encoder_delta[0] = 1;
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(patch.osc[0].range == range_before + 1u);
+
   memset(&input, 0, sizeof(input));
   input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
   fm_ui_handle_input(&ui, &patch, &input);
@@ -66,6 +74,20 @@ int main(void) {
   assert(ui.hold == 1);
   assert(patch.cutoff_hz > before);
   assert(patch.cutoff_hz - before < 10.0f);
+
+  /* CONTOUR normal edits loudness; HOLD edits filter contour independently. */
+  memset(&input, 0, sizeof(input));
+  input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(ui.page == FM_UI_CONTOUR);
+  const float amp_attack = patch.attack_s;
+  const float filter_attack = patch.filter_attack_s;
+  memset(&input, 0, sizeof(input));
+  input.buttons = bit(FM1_KEY_HOLD);
+  input.encoder_delta[0] = 1;
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(patch.attack_s == amp_attack);
+  assert(patch.filter_attack_s > filter_attack);
 
   fm_ui_render(&ui, &patch, "TEST PATCH");
   assert(present_count == 1);
