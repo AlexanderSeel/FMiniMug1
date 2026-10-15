@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Build non-installable FMiniMug1 FM-1 target images.
 
-Default mode builds the raw hardware diagnostic. --synth-check compiles and
-links the complete synth runtime with a synthetic control map purely to verify
-JieLi/Felucca compatibility. Neither mode creates .fwsc or writes a device.
+Modes:
+  default         raw hardware input diagnostic
+  --audio-check   autonomous ALNK/DSP timing diagnostic, no control map needed
+  --synth-check   complete synth link check with a synthetic control map
+
+No mode creates .fwsc or writes a device.
 
 Environment:
   FELUCCA_SRC      checkout of https://github.com/hugelton/Felucca
@@ -23,7 +26,7 @@ OUT = ROOT / "build" / "felucca-target"
 APP_XIP = 0x02000120
 CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wextra", "-Wno-unused-function"]
 SYNTH_MAP = [
-    "-DFMM_BUTTON_MAP_VERIFIED=1", "-DFMM_TARGET_DIAGNOSTIC=0",
+    "-DFMM_BUTTON_MAP_VERIFIED=1", "-DFMM_TARGET_DIAGNOSTIC=0", "-DFMM_TARGET_AUDIO_DIAGNOSTIC=0",
     "-DFMM_BTN_RAW_OCT_DOWN=0", "-DFMM_BTN_RAW_OCT_UP=1",
     "-DFMM_BTN_RAW_PAGE_LEFT=2", "-DFMM_BTN_RAW_PAGE_RIGHT=3",
     "-DFMM_BTN_RAW_PRESET=4", "-DFMM_BTN_RAW_PATTERN=5",
@@ -74,12 +77,6 @@ def archive_defines(objdump: Path, archive: Path, symbol: str) -> bool:
 
 
 def find_softfloat_runtime(toolchain: Path, objdump: Path) -> Path:
-    """Find a pi32v2-compatible archive that actually defines __subsf3.
-
-    Simple byte matching is insufficient because libc archives may reference
-    the helper without defining it. The JieLi common objdump can inspect the
-    pi32v2 archive symbol table, so only a real definition is accepted.
-    """
     candidates: list[Path] = []
     preferred = ("*builtins*.a", "libgcc*.a", "libclang_rt*.a", "*compiler*rt*.a")
     seen: set[Path] = set()
@@ -101,11 +98,16 @@ def find_softfloat_runtime(toolchain: Path, objdump: Path) -> Path:
 
 
 def main() -> int:
-    synth_check = "--synth-check" in sys.argv[1:]
-    unknown = [a for a in sys.argv[1:] if a != "--synth-check"]
+    args = sys.argv[1:]
+    synth_check = "--synth-check" in args
+    audio_check = "--audio-check" in args
+    unknown = [a for a in args if a not in ("--synth-check", "--audio-check")]
     if unknown:
         fail("unknown arguments: " + " ".join(unknown))
+    if synth_check and audio_check:
+        fail("select only one of --synth-check or --audio-check")
 
+    mode = "synth" if synth_check else "audio" if audio_check else "diag"
     felucca, tc = require_tree()
     cc = tc / "pi32v2" / "bin" / "clang"
     ld = tc / "pi32v2" / "bin" / "ld"
@@ -125,31 +127,37 @@ def main() -> int:
 
     OUT.mkdir(parents=True, exist_ok=True)
     inc = [f"-I{hal}", f"-I{fsrc}", f"-I{ROOT / 'firmware' / 'include'}", f"-I{target}"]
-    defs = SYNTH_MAP if synth_check else ["-DFMM_TARGET_DIAGNOSTIC=1"]
-    stem = "fminimug1-synth-check" if synth_check else "fminimug1-diag"
+    if synth_check:
+        defs = SYNTH_MAP
+        stem = "fminimug1-synth-check"
+    elif audio_check:
+        defs = ["-DFMM_TARGET_DIAGNOSTIC=0", "-DFMM_TARGET_AUDIO_DIAGNOSTIC=1"]
+        stem = "fminimug1-audio-check"
+    else:
+        defs = ["-DFMM_TARGET_DIAGNOSTIC=1", "-DFMM_TARGET_AUDIO_DIAGNOSTIC=0"]
+        stem = "fminimug1-diag"
 
     asm_sources = [fw / "crt0.S", hal / "fm1_vec.S", hal / "fm1_isr.S"]
     c_sources = [target / "fm1_minilibc.c"]
-    if synth_check:
+    if synth_check or audio_check:
         c_sources += [portable / "fm_voice.c", portable / "fm_seq.c", portable / "fm_ui.c", portable / "fm_app.c"]
     else:
         c_sources += [portable / "fm_diag.c"]
     c_sources += [target / "fm1_lcd_bridge.c", target / "fm1_platform_felucca.c", target / "fm1_bootstrap.c", target / "fm1_target_main.c"]
 
     objects: list[Path] = []
-    mode_tag = "synth" if synth_check else "diag"
     for src in asm_sources:
-        obj = OUT / f"{mode_tag}_{src.stem}.o"
+        obj = OUT / f"{mode}_{src.stem}.o"
         run([str(cc), "-target", "pi32v2", "-c", str(src), "-o", str(obj)])
         objects.append(obj)
     for src in c_sources:
-        obj = OUT / f"{mode_tag}_{src.stem}.o"
+        obj = OUT / f"{mode}_{src.stem}.o"
         run([str(cc), "-target", "pi32v2", *CFLAGS, *inc, *defs, "-c", str(src), "-o", str(obj)])
         objects.append(obj)
 
     link_inputs = list(map(str, objects))
     runtime: Path | None = None
-    if synth_check:
+    if synth_check or audio_check:
         runtime = find_softfloat_runtime(tc, objdump)
         link_inputs.append(str(runtime))
         print(f"softfloat_runtime={runtime}")
@@ -211,16 +219,26 @@ def main() -> int:
         fail("linked image references chip ROM: " + rom_refs[0])
 
     digest = hashlib.sha256(image).hexdigest()
-    info_name = "SYNTH-CHECK-INFO.txt" if synth_check else "BUILD-INFO.txt"
-    sum_name = "SYNTH-CHECK-SHA256SUMS" if synth_check else "SHA256SUMS"
+    if synth_check:
+        info_name, sum_name = "SYNTH-CHECK-INFO.txt", "SYNTH-CHECK-SHA256SUMS"
+        title, control_map = "FMiniMug1 full synth target link check", "synthetic-not-for-hardware"
+    elif audio_check:
+        info_name, sum_name = "AUDIO-CHECK-INFO.txt", "AUDIO-CHECK-SHA256SUMS"
+        title, control_map = "FMiniMug1 audio timing diagnostic target", "not-required-audio-diagnostic"
+    else:
+        info_name, sum_name = "BUILD-INFO.txt", "SHA256SUMS"
+        title, control_map = "FMiniMug1 diagnostic target build", "raw-diagnostic"
+
     (OUT / sum_name).write_text(f"{digest}  {app_bin.name}\n")
     info = [
-        "FMiniMug1 full synth target link check" if synth_check else "FMiniMug1 diagnostic target build",
+        title,
         f"image={app_bin.name}", f"bytes={len(image)}", f"sha256={digest}",
         f"start={APP_XIP:#010x}", f"bss_start={symbol('_bss_start'):#010x}", f"bss_end={symbol('_bss_end'):#010x}",
-        "installable=no", "flash_write_api=disabled",
-        "control_map=synthetic-not-for-hardware" if synth_check else "control_map=raw-diagnostic",
+        "installable=no", "flash_write_api=disabled", f"control_map={control_map}",
     ]
+    if audio_check:
+        info.append("audio_budget_ticks=69632")
+        info.append("oversampling_test=automatic-1x-2x")
     if runtime is not None:
         info.append(f"softfloat_runtime={runtime.name}")
     (OUT / info_name).write_text("\n".join(info) + "\n")
