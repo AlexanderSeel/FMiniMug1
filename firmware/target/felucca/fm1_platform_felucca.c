@@ -41,10 +41,9 @@ static fm1_felucca_audio_renderer_t audio_renderer;
 static void *audio_renderer_user;
 static uint32_t previous_notes;
 static uint8_t audio_started;
+static volatile fm1_felucca_audio_stats_t audio_stats;
 
-/* Required by Felucca fm1_irq.h in the same translation unit. The first
- * bring-up target stops audio and traps; later this can become a richer crash
- * screen/reboot path once recovery has been verified. */
+/* Required by Felucca fm1_irq.h in the same translation unit. */
 static void fm1_fault(const fm1_crash_t *crash) {
   (void)crash;
   fm1_audio_stop();
@@ -75,9 +74,26 @@ static uint8_t raw_button_for_semantic(uint8_t semantic) {
 #endif
 
 void fm1_felucca_set_audio_renderer(fm1_felucca_audio_renderer_t renderer, void *user) { audio_renderer = renderer; audio_renderer_user = user; }
+
+void fm1_felucca_audio_stats_reset(void) {
+  audio_stats.irq_count = 0u;
+  audio_stats.last_ticks = 0u;
+  audio_stats.max_ticks = 0u;
+  audio_stats.over_budget_count = 0u;
+}
+
+void fm1_felucca_audio_stats_get(fm1_felucca_audio_stats_t *stats) {
+  if (!stats) return;
+  stats->irq_count = audio_stats.irq_count;
+  stats->last_ticks = audio_stats.last_ticks;
+  stats->max_ticks = audio_stats.max_ticks;
+  stats->over_budget_count = audio_stats.over_budget_count;
+}
+
 void fm1_felucca_audio_start(void) {
   if (audio_started) return;
   memset(audio_buffer, 0, sizeof(audio_buffer));
+  fm1_felucca_audio_stats_reset();
   fm1_audio_init(audio_buffer, FMM_AUDIO_HALF_WORDS, isr_alnk0, 3u);
   audio_started = 1u;
   fm1_felucca_irq_enable();
@@ -90,8 +106,14 @@ void fm1_alnk0_irq(void) {
   if (pending & FM1_AUDIO_HALF) {
     const uint32_t half = fm1_audio_free_half();
     fm1_audio_block_t block = {&audio_buffer[half * FMM_AUDIO_HALF_WORDS], FMM_AUDIO_HALF_FRAMES};
+    const uint32_t started = fm1_ticks();
     if (audio_renderer) audio_renderer(&block, audio_renderer_user);
     else memset(block.samples, 0, FMM_AUDIO_HALF_WORDS * sizeof(block.samples[0]));
+    const uint32_t elapsed = fm1_ticks() - started;
+    audio_stats.last_ticks = elapsed;
+    if (elapsed > audio_stats.max_ticks) audio_stats.max_ticks = elapsed;
+    if (elapsed > FMM_AUDIO_HALF_BUDGET_TICKS) ++audio_stats.over_budget_count;
+    ++audio_stats.irq_count;
     fm1_audio_ack_half();
   }
 }
