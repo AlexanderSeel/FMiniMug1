@@ -1,87 +1,7 @@
 import React, {useEffect,useMemo,useRef,useState} from 'react';
 import {PATCHES, SEQS, type Patch} from './data';
+import {engine, type EngineMode, type Meter} from './audio/engine';
 import './styles.css';
-
-const midiToHz=(n:number)=>440*Math.pow(2,(n-69)/12);
-
-class MiniEngine {
-  ctx:AudioContext|null=null;
-  master:GainNode|null=null;
-  filter:BiquadFilterNode|null=null;
-  active:{o:OscillatorNode,g:GainNode}[]=[];
-  noise:AudioBufferSourceNode|null=null;
-  patch=PATCHES[0];
-  lastHz=110;
-
-  async start(){
-    if(!this.ctx){
-      this.ctx=new AudioContext();
-      this.master=this.ctx.createGain();
-      this.master.gain.value=.45;
-      this.master.connect(this.ctx.destination);
-    }
-    if(this.ctx.state==='suspended') await this.ctx.resume();
-  }
-
-  stop(){
-    this.active.forEach(x=>{try{x.o.stop()}catch{}});
-    this.active=[];
-    if(this.noise){try{this.noise.stop()}catch{};this.noise=null}
-  }
-
-  async noteOn(note:number,p=this.patch){
-    await this.start();
-    this.stop();
-    this.patch=p;
-    const c=this.ctx!,now=c.currentTime;
-    const f=c.createBiquadFilter();
-    f.type='lowpass';
-    f.Q.value=p.res*22;
-    f.frequency.setValueAtTime(Math.max(80,p.cutoff*.55),now);
-    f.frequency.exponentialRampToValueAtTime(Math.min(15000,p.cutoff+p.env),now+p.attack+.01);
-    f.frequency.exponentialRampToValueAtTime(Math.max(80,p.cutoff+p.env*p.sustain),now+p.attack+p.decay+.02);
-    const sh=c.createWaveShaper();
-    const curve=new Float32Array(1024);
-    for(let i=0;i<1024;i++){
-      const x=i/511.5-1;
-      curve[i]=Math.tanh(x*p.drive);
-    }
-    sh.curve=curve;
-    sh.oversample='2x';
-    f.connect(sh);
-    sh.connect(this.master!);
-    this.filter=f;
-    const target=midiToHz(note);
-    for(let i=0;i<3;i++){
-      const o=c.createOscillator(),g=c.createGain();
-      o.type=p.osc[i];
-      const drift=(Math.random()-.5)*p.drift*3;
-      o.frequency.setValueAtTime(this.lastHz*Math.pow(2,(p.detune[i]+drift)/12),now);
-      o.frequency.exponentialRampToValueAtTime(target*Math.pow(2,(p.detune[i]+drift)/12),now+Math.max(.003,p.glide));
-      g.gain.setValueAtTime(.0001,now);
-      g.gain.exponentialRampToValueAtTime(Math.max(.0001,p.levels[i]),now+p.attack+.002);
-      g.gain.exponentialRampToValueAtTime(Math.max(.0001,p.levels[i]*p.sustain),now+p.attack+p.decay+.004);
-      o.connect(g);
-      g.connect(f);
-      o.start();
-      this.active.push({o,g});
-    }
-    this.lastHz=target;
-  }
-
-  noteOff(p=this.patch){
-    if(!this.ctx)return;
-    const now=this.ctx.currentTime;
-    this.active.forEach(x=>{
-      x.g.gain.cancelScheduledValues(now);
-      x.g.gain.setTargetAtTime(.0001,now,Math.max(.01,p.release/4));
-      setTimeout(()=>{try{x.o.stop()}catch{}},Math.max(40,p.release*1200));
-    });
-    this.active=[];
-  }
-}
-
-const engine=new MiniEngine();
 
 function Knob({label,value,min,max,onChange,unit=''}:{label:string,value:number,min:number,max:number,onChange:(v:number)=>void,unit?:string}){
   return <label className="knob">
@@ -89,6 +9,45 @@ function Knob({label,value,min,max,onChange,unit=''}:{label:string,value:number,
     <input type="range" min={min} max={max} step={(max-min)/200} value={value} onChange={e=>onChange(+e.target.value)}/>
     <b>{Math.round(value*100)/100}{unit}</b>
   </label>;
+}
+
+function Diagnostics(){
+  const canvas=useRef<HTMLCanvasElement|null>(null);
+  const [mode,setMode]=useState<EngineMode>(engine.mode);
+  const [meter,setMeter]=useState<Meter>({peak:0,rms:0});
+
+  useEffect(()=>{
+    const offMode=engine.onMode(setMode);
+    const offMeter=engine.onMeter(setMeter);
+    let frame=0;
+    const draw=()=>{
+      const c=canvas.current,a=engine.analyser;
+      if(c&&a){
+        const g=c.getContext('2d');
+        if(g){
+          const wave=new Uint8Array(a.fftSize);
+          const bins=new Uint8Array(a.frequencyBinCount);
+          a.getByteTimeDomainData(wave);a.getByteFrequencyData(bins);
+          g.clearRect(0,0,c.width,c.height);
+          g.strokeStyle='#f2a640';g.lineWidth=1.5;g.beginPath();
+          for(let i=0;i<wave.length;i+=4){const x=i/(wave.length-1)*c.width,y=(wave[i]/255)*c.height*.52;if(i===0)g.moveTo(x,y);else g.lineTo(x,y)}g.stroke();
+          const base=c.height*.58;
+          g.fillStyle='rgba(242,166,64,.45)';
+          const count=64,bw=c.width/count;
+          for(let i=0;i<count;i++){const v=bins[Math.floor(i*bins.length/count)]/255;g.fillRect(i*bw, c.height, Math.max(1,bw-1), -(c.height-base)*v)}
+        }
+      }
+      frame=requestAnimationFrame(draw);
+    };
+    frame=requestAnimationFrame(draw);
+    return()=>{offMode();offMeter();cancelAnimationFrame(frame)};
+  },[]);
+
+  return <div className="diagnostics">
+    <div className="diagHead"><strong>DSP MONITOR</strong><span className={`engineMode ${mode}`}>{mode==='native-wasm'?'NATIVE DSP / WASM':mode==='web-audio-fallback'?'WEB AUDIO FALLBACK':'DSP IDLE'}</span></div>
+    <canvas ref={canvas} width={620} height={118}/>
+    <div className="meters"><span>PEAK {(meter.peak*100).toFixed(1)}%</span><i><b style={{width:`${Math.min(100,meter.peak*100)}%`}}/></i><span>RMS {(meter.rms*100).toFixed(1)}%</span><i><b style={{width:`${Math.min(100,meter.rms*100)}%`}}/></i></div>
+  </div>;
 }
 
 export default function App(){
@@ -102,9 +61,9 @@ export default function App(){
 
   const update=(k:keyof Patch,v:Patch[keyof Patch])=>{
     const n={...patch,[k]:v} as Patch;
-    setPatch(n);
-    engine.patch=n;
+    setPatch(n);engine.applyPatch(n);
   };
+  const choosePatch=(p:Patch)=>{setPatch(p);engine.applyPatch(p)};
   const play=(n:number)=>engine.noteOn(n,patch);
   const stop=()=>engine.noteOff(patch);
 
@@ -114,30 +73,17 @@ export default function App(){
       if(map[e.key]!=null&&!e.repeat)play(map[e.key]);
     };
     const up=(e:KeyboardEvent)=>{if('awsedftgzhujkol'.includes(e.key))stop()};
-    addEventListener('keydown',down);
-    addEventListener('keyup',up);
+    addEventListener('keydown',down);addEventListener('keyup',up);
     return()=>{removeEventListener('keydown',down);removeEventListener('keyup',up)};
   },[patch]);
 
   useEffect(()=>()=>{if(timer.current)clearInterval(timer.current)},[]);
 
   const toggleSeq=()=>{
-    if(playing){
-      if(timer.current)clearInterval(timer.current);
-      timer.current=undefined;
-      setPlaying(false);
-      stop();
-      return;
-    }
-    setPlaying(true);
-    step.current=0;
-    const tick=()=>{
-      const i=step.current++%seq.notes.length;
-      play(seq.notes[i]);
-      setTimeout(stop,60000/seq.bpm*seq.gates[i]);
-    };
-    tick();
-    timer.current=window.setInterval(tick,60000/seq.bpm);
+    if(playing){if(timer.current)clearInterval(timer.current);timer.current=undefined;setPlaying(false);stop();return}
+    setPlaying(true);step.current=0;
+    const tick=()=>{const i=step.current++%seq.notes.length;play(seq.notes[i]);setTimeout(stop,60000/seq.bpm*seq.gates[i])};
+    tick();timer.current=window.setInterval(tick,60000/seq.bpm);
   };
 
   const connectMidi=async()=>{
@@ -145,12 +91,8 @@ export default function App(){
       const access=await navigator.requestMIDIAccess({sysex:true});
       const out=[...access.outputs.values()][0];
       if(!out){setMidi('No MIDI output');return}
-      setMidi(out.name||'FM-1 MIDI');
-      out.send([0x90,60,1]);
-      out.send([0x80,60,0],performance.now()+20);
-    }catch{
-      setMidi('permission/connection failed');
-    }
+      setMidi(out.name||'FM-1 MIDI');out.send([0x90,60,1]);out.send([0x80,60,0],performance.now()+20);
+    }catch{setMidi('permission/connection failed')}
   };
 
   const controls=useMemo(()=>({
@@ -165,36 +107,15 @@ export default function App(){
   const keys=[48,50,52,53,55,57,59,60,62,64,65,67,69,71,72];
 
   return <main>
-    <header>
-      <div><h1>FMiniMug1</h1><p>FM-1 · classic 3-OSC ladder performance synth</p></div>
-      <button onClick={connectMidi}>MIDI · {midi}</button>
-    </header>
+    <header><div><h1>FMiniMug1</h1><p>FM-1 · native 3-OSC ladder performance synth</p></div><button onClick={connectMidi}>MIDI · {midi}</button></header>
     <section className="panel">
-      <div className="panelTitle">
-        <span>PERFORMANCE CONTROL</span>
-        <strong>{patch.name}</strong>
-        <select value={patch.name} onChange={e=>{const p=PATCHES.find(x=>x.name===e.target.value)!;setPatch(p);engine.patch=p}}>
-          {PATCHES.map(p=><option key={p.name}>{p.name} · {p.category}</option>)}
-        </select>
-      </div>
+      <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatch(PATCHES.find(x=>x.name===e.target.value)!)}>{PATCHES.map(p=><option key={p.name}>{p.name} · {p.category}</option>)}</select></div>
       <nav>{['OSC','MIX','FILTER','CONTOUR','MOD','SEQ'].map(x=><button key={x} className={page===x?'active':''} onClick={()=>setPage(x)}>{x}</button>)}</nav>
-      <div className="screen">
-        <div className="lcd">
-          <span>FMiniMug1 / {page}</span>
-          <strong>{patch.name}</strong>
-          <i>{page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`A ${patch.attack.toFixed(2)} D ${patch.decay.toFixed(2)} S ${Math.round(patch.sustain*100)} R ${patch.release.toFixed(2)}`:'4 ENCODERS · HOLD = FINE'}</i>
-        </div>
-        <div className="controls">{controls}</div>
-      </div>
-      <div className="seqbar">
-        <select value={seq.name} onChange={e=>setSeq(SEQS.find(x=>x.name===e.target.value)!)}>
-          {SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}
-        </select>
-        <button className={playing?'stop':''} onClick={toggleSeq}>{playing?'STOP':'PLAY SEQUENCE'}</button>
-        <span>{PATCHES.length} patches · {SEQS.length} sequences · Keyboard: A W S E D F T G Z H U J K O L</span>
-      </div>
+      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`A ${patch.attack.toFixed(2)} D ${patch.decay.toFixed(2)} S ${Math.round(patch.sustain*100)} R ${patch.release.toFixed(2)}`:'4 ENCODERS · HOLD = FINE · PRESS = FOCUS'}</i></div><div className="controls">{controls}</div></div>
+      <Diagnostics/>
+      <div className="seqbar"><select value={seq.name} onChange={e=>setSeq(SEQS.find(x=>x.name===e.target.value)!)}>{SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={toggleSeq}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · Keyboard: A W S E D F T G Z H U J K O L</span></div>
       <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={stop} onMouseLeave={stop}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
     </section>
-    <footer>Original FMiniMug1 UI and factory patches · Minimoog-inspired workflow · not affiliated with Moog Music or M-VAVE.</footer>
+    <footer>Original FMiniMug1 UI and sound bank · native DSP shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
   </main>;
 }
