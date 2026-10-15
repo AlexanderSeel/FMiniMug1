@@ -46,6 +46,54 @@ static float envelope_tick(float current, float gate, float attack_s, float deca
   return clampf(current, 0.0f, 1.05f);
 }
 
+static int note_is_held(const fm_voice_t *v, uint8_t note) {
+  return (v->held_notes[note >> 6] & (1ull << (note & 63u))) != 0ull;
+}
+
+static void note_set_held(fm_voice_t *v, uint8_t note, int held) {
+  const uint64_t mask = 1ull << (note & 63u);
+  if (held) v->held_notes[note >> 6] |= mask;
+  else v->held_notes[note >> 6] &= ~mask;
+}
+
+static int select_held_note(const fm_voice_t *v) {
+  if ((v->held_notes[0] | v->held_notes[1]) == 0ull) return -1;
+
+  const uint8_t mode = v->patch.note_priority <= FM_NOTE_LAST ? v->patch.note_priority : FM_NOTE_LOW;
+  if (mode == FM_NOTE_LOW) {
+    for (int n = 0; n < 128; ++n) if (note_is_held(v, (uint8_t)n)) return n;
+  } else if (mode == FM_NOTE_HIGH) {
+    for (int n = 127; n >= 0; --n) if (note_is_held(v, (uint8_t)n)) return n;
+  } else {
+    int best = -1;
+    uint16_t serial = 0u;
+    for (int n = 0; n < 128; ++n) {
+      if (note_is_held(v, (uint8_t)n) && (best < 0 || v->held_order[n] >= serial)) {
+        best = n;
+        serial = v->held_order[n];
+      }
+    }
+    return best;
+  }
+  return -1;
+}
+
+static void retarget_note(fm_voice_t *v, uint8_t note, int retrigger_contours) {
+  const float base = midi_hz(note);
+  v->current_note = note;
+  if (retrigger_contours) {
+    v->env_amp = 0.0f;
+    v->env_filter = 0.0f;
+  }
+  for (int i = 0; i < 3; ++i) {
+    const fm_osc_params_t *o = &v->patch.osc[i];
+    const float st = range_semitones(o->range) + o->coarse_semitones + o->fine_cents / 100.0f;
+    v->target_freq[i] = (o->keyboard_track ? base : 440.0f) * powf(2.0f, st / 12.0f);
+    if (o->low_mode) v->target_freq[i] *= 0.01f;
+    if (v->freq[i] <= 0.0f) v->freq[i] = v->target_freq[i];
+  }
+}
+
 /* Standard PolyBLEP correction for a discontinuity at phase 0. */
 static float poly_blep(float t, float dt) {
   if (dt <= 0.0f) return 0.0f;
@@ -138,6 +186,7 @@ void fm_voice_init(fm_voice_t *v, float sample_rate) {
   v->patch.filter_keytrack = 0;
   v->patch.oversample_2x = 1;
   v->patch.retrigger = 0;
+  v->patch.note_priority = FM_NOTE_LOW;
   for (int i = 0; i < 3; ++i) {
     v->patch.osc[i].wave = FM_WAVE_SAW;
     v->patch.osc[i].level = i == 0 ? 0.8f : 0.35f;
@@ -151,28 +200,45 @@ void fm_voice_set_patch(fm_voice_t *v, const fm_patch_t *p) {
   for (int i = 0; i < 3; ++i) {
     if (v->patch.osc[i].range > FM_RANGE_2) v->patch.osc[i].range = FM_RANGE_8;
   }
+  if (v->patch.note_priority > FM_NOTE_LAST) v->patch.note_priority = FM_NOTE_LOW;
 }
 
 void fm_voice_note_on(fm_voice_t *v, uint8_t note, uint8_t velocity) {
-  const float base = midi_hz(note);
   const int was_gated = v->gate > 0.0f;
-  v->current_note = note;
-  if (was_gated && v->patch.retrigger) {
-    v->env_amp = 0.0f;
-    v->env_filter = 0.0f;
+  note_set_held(v, note, 1);
+  v->held_order[note] = ++v->note_serial;
+  if (v->note_serial == 0u) {
+    for (int i = 0; i < 128; ++i) v->held_order[i] = note_is_held(v, (uint8_t)i) ? 1u : 0u;
+    v->held_order[note] = 2u;
+    v->note_serial = 2u;
   }
-  for (int i = 0; i < 3; ++i) {
-    const fm_osc_params_t *o = &v->patch.osc[i];
-    const float st = range_semitones(o->range) + o->coarse_semitones + o->fine_cents / 100.0f;
-    v->target_freq[i] = (o->keyboard_track ? base : 440.0f) * powf(2.0f, st / 12.0f);
-    if (o->low_mode) v->target_freq[i] *= 0.01f;
-    if (v->freq[i] <= 0.0f) v->freq[i] = v->target_freq[i];
+
+  const int selected = select_held_note(v);
+  const int changed = selected >= 0 && (uint8_t)selected != v->current_note;
+  if (!was_gated || changed) {
+    retarget_note(v, (uint8_t)selected, was_gated && changed && v->patch.retrigger);
   }
   v->velocity = clampf((float)velocity / 127.0f, 0.05f, 1.0f);
   v->gate = 1.0f;
 }
 
+void fm_voice_note_off_note(fm_voice_t *v, uint8_t note) {
+  note_set_held(v, note, 0);
+  v->held_order[note] = 0u;
+  const int selected = select_held_note(v);
+  if (selected < 0) {
+    v->gate = 0.0f;
+    return;
+  }
+  if ((uint8_t)selected != v->current_note) {
+    retarget_note(v, (uint8_t)selected, v->patch.retrigger != 0u);
+  }
+}
+
 void fm_voice_note_off(fm_voice_t *v) {
+  v->held_notes[0] = 0ull;
+  v->held_notes[1] = 0ull;
+  memset(v->held_order, 0, sizeof(v->held_order));
   v->gate = 0.0f;
 }
 
