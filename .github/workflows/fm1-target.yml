@@ -4,6 +4,9 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  FELUCCA_REF: a53ecf428c29c780108fd70a31b71a32a6b5c313
+
 jobs:
   jieli-diagnostic-link:
     runs-on: ubuntu-latest
@@ -11,10 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Felucca HAL reference
+      - name: Fetch pinned Felucca HAL reference
         run: |
-          git clone --depth 1 https://github.com/hugelton/Felucca.git /tmp/felucca
-          git -C /tmp/felucca rev-parse HEAD
+          git init /tmp/felucca
+          git -C /tmp/felucca remote add origin https://github.com/hugelton/Felucca.git
+          git -C /tmp/felucca fetch --depth 1 origin "$FELUCCA_REF"
+          git -C /tmp/felucca checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/felucca rev-parse HEAD)" = "$FELUCCA_REF"
 
       - name: Install JieLi pi32v2 toolchain
         run: |
