@@ -76,18 +76,22 @@ static uint8_t raw_button_for_semantic(uint8_t semantic) {
 void fm1_felucca_set_audio_renderer(fm1_felucca_audio_renderer_t renderer, void *user) { audio_renderer = renderer; audio_renderer_user = user; }
 
 void fm1_felucca_audio_stats_reset(void) {
+  const uint32_t irq_state = fm1__lock();
   audio_stats.irq_count = 0u;
   audio_stats.last_ticks = 0u;
   audio_stats.max_ticks = 0u;
   audio_stats.over_budget_count = 0u;
+  fm1__unlock(irq_state);
 }
 
 void fm1_felucca_audio_stats_get(fm1_felucca_audio_stats_t *stats) {
   if (!stats) return;
+  const uint32_t irq_state = fm1__lock();
   stats->irq_count = audio_stats.irq_count;
   stats->last_ticks = audio_stats.last_ticks;
   stats->max_ticks = audio_stats.max_ticks;
   stats->over_budget_count = audio_stats.over_budget_count;
+  fm1__unlock(irq_state);
 }
 
 void fm1_felucca_audio_start(void) {
