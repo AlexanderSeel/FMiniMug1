@@ -51,6 +51,12 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_app.c -o build/fm_app.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_diag.c -o build/fm_diag.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
+      - name: Verify DSP hot path has no libm dependencies
+        run: |
+          if nm -u build/fm_voice.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
+            echo 'unexpected libm dependency in firmware/src/fm_voice.c' >&2
+            exit 1
+          fi
       - name: Compile-check Felucca target adapter with host HAL stubs
         run: |
           INC='-Itests/felucca_stub -Ifirmware/include -Ifirmware/target/felucca'
@@ -63,7 +69,7 @@ jobs:
           MAP='-DFMM_BUTTON_MAP_VERIFIED -DFMM_TARGET_DIAGNOSTIC=0 -DFMM_BTN_RAW_OCT_DOWN=0 -DFMM_BTN_RAW_OCT_UP=1 -DFMM_BTN_RAW_PAGE_LEFT=2 -DFMM_BTN_RAW_PAGE_RIGHT=3 -DFMM_BTN_RAW_PRESET=4 -DFMM_BTN_RAW_PATTERN=5 -DFMM_BTN_RAW_PLAY=6 -DFMM_BTN_RAW_HOLD=7 -DFMM_BTN_RAW_ENC1=8 -DFMM_BTN_RAW_ENC2=9 -DFMM_BTN_RAW_ENC3=10 -DFMM_BTN_RAW_ENC4=11 -DFMM_ENC_RAW_1=0 -DFMM_ENC_RAW_2=1 -DFMM_ENC_RAW_3=2 -DFMM_ENC_RAW_4=3'
           cc -std=c11 -Wall -Wextra -Werror $INC $MAP -c firmware/target/felucca/fm1_platform_felucca.c -o build/fm1_platform_felucca_mapped.o
           cc -std=c11 -Wall -Wextra -Werror $INC $MAP -c firmware/target/felucca/fm1_target_main.c -o build/fm1_target_main_mapped.o
-      - name: Run DSP stability and mono-priority tests
+      - name: Run DSP stability, ADSR and mono-priority tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c tests/test_dsp.c -lm -o build/test_dsp
           ./build/test_dsp
@@ -73,9 +79,9 @@ jobs:
           ./build/test_seq
       - name: Run UI interaction tests
         run: |
-          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_ui.c tests/test_ui.c -lm -o build/test_ui
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_ui.c tests/test_ui.c -o build/test_ui
           ./build/test_ui
       - name: Run portable application runtime tests
         run: |
-          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_seq.c firmware/src/fm_ui.c firmware/src/fm_app.c tests/test_app.c -lm -o build/test_app
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_seq.c firmware/src/fm_ui.c firmware/src/fm_app.c tests/test_app.c -o build/test_app
           ./build/test_app
