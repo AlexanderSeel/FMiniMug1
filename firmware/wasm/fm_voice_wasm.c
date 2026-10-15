@@ -81,6 +81,13 @@ void fmm_set_param(int id, float value) {
         case FMM_FILTER_SUSTAIN: voice.patch.filter_sustain = value; break;
         case FMM_FILTER_RELEASE: voice.patch.filter_release_s = value; break;
         case FMM_RETRIGGER: voice.patch.retrigger = value >= 0.5f; break;
+        case FMM_NOTE_PRIORITY: {
+            int mode = (int)value;
+            if (mode < FM_NOTE_LOW) mode = FM_NOTE_LOW;
+            if (mode > FM_NOTE_LAST) mode = FM_NOTE_LAST;
+            voice.patch.note_priority = (uint8_t)mode;
+            break;
+        }
         case FMM_PARAM_COUNT: break;
     }
 }
@@ -93,6 +100,13 @@ void fmm_note_on(int note, int velocity) {
     if (velocity < 1) velocity = 1;
     if (velocity > 127) velocity = 127;
     fm_voice_note_on(&voice, (uint8_t)note, (uint8_t)velocity);
+}
+
+__attribute__((visibility("default")))
+void fmm_note_off_note(int note) {
+    if (note < 0) note = 0;
+    if (note > 127) note = 127;
+    fm_voice_note_off_note(&voice, (uint8_t)note);
 }
 
 __attribute__((visibility("default")))
