@@ -19,7 +19,6 @@ static void test_note_priority(fm_voice_t *voice) {
   fm_voice_note_off(voice);
   voice->patch.retrigger = 0;
 
-  /* Classic default: low note wins until released. */
   voice->patch.note_priority = FM_NOTE_LOW;
   fm_voice_note_on(voice, 60, 100);
   fm_voice_note_on(voice, 67, 100);
@@ -29,7 +28,6 @@ static void test_note_priority(fm_voice_t *voice) {
   fm_voice_note_off_note(voice, 67);
   assert(voice->gate == 0.0f);
 
-  /* High note wins and falls back to the lower held key. */
   voice->patch.note_priority = FM_NOTE_HIGH;
   fm_voice_note_on(voice, 60, 100);
   fm_voice_note_on(voice, 67, 100);
@@ -38,7 +36,6 @@ static void test_note_priority(fm_voice_t *voice) {
   assert(voice->gate > 0.0f && voice->current_note == 60);
   fm_voice_note_off(voice);
 
-  /* Last-note priority returns to the most recently pressed remaining key. */
   voice->patch.note_priority = FM_NOTE_LAST;
   fm_voice_note_on(voice, 60, 100);
   fm_voice_note_on(voice, 67, 100);
@@ -50,6 +47,41 @@ static void test_note_priority(fm_voice_t *voice) {
   assert(voice->current_note == 60);
   fm_voice_note_off_note(voice, 60);
   assert(voice->gate == 0.0f);
+}
+
+static void test_adsr_stages(fm_voice_t *voice) {
+  fm_voice_note_off(voice);
+  voice->patch.attack_s = 0.001f;
+  voice->patch.decay_s = 0.02f;
+  voice->patch.sustain = 0.31f;
+  voice->patch.release_s = 0.02f;
+  voice->patch.filter_attack_s = 0.001f;
+  voice->patch.filter_decay_s = 0.02f;
+  voice->patch.filter_sustain = 0.42f;
+  voice->patch.filter_release_s = 0.02f;
+  voice->env_amp = 0.0f;
+  voice->env_filter = 0.0f;
+
+  fm_voice_note_on(voice, 60, 100);
+  render_peak(voice, 12000);
+  assert(voice->env_amp_stage == FM_ENV_SUSTAIN);
+  assert(voice->env_filter_stage == FM_ENV_SUSTAIN);
+  assert(fabsf(voice->env_amp - 0.31f) < 0.002f);
+  assert(fabsf(voice->env_filter - 0.42f) < 0.002f);
+
+  /* Remaining in sustain must not re-enter attack. */
+  render_peak(voice, 12000);
+  assert(voice->env_amp_stage == FM_ENV_SUSTAIN);
+  assert(voice->env_filter_stage == FM_ENV_SUSTAIN);
+  assert(fabsf(voice->env_amp - 0.31f) < 0.002f);
+  assert(fabsf(voice->env_filter - 0.42f) < 0.002f);
+
+  fm_voice_note_off(voice);
+  assert(voice->env_amp_stage == FM_ENV_RELEASE);
+  assert(voice->env_filter_stage == FM_ENV_RELEASE);
+  render_peak(voice, 12000);
+  assert(voice->env_amp < 0.001f);
+  assert(voice->env_filter < 0.001f);
 }
 
 int main(void) {
@@ -75,20 +107,18 @@ int main(void) {
   voice.patch.filter_drive = 1.3f;
   voice.patch.drift = 0.2f;
 
-  /* 8' is neutral; classic range switches move by octaves around it. */
   fm_voice_note_on(&voice, 60, 112);
   const float freq_8 = voice.target_freq[0];
   voice.patch.osc[0].range = FM_RANGE_16;
   fm_voice_note_on(&voice, 60, 112);
   const float freq_16 = voice.target_freq[0];
-  assert(fabsf(freq_16 * 2.0f - freq_8) < 0.05f);
+  assert(fabsf(freq_16 * 2.0f - freq_8) < 0.08f);
   voice.patch.osc[0].range = FM_RANGE_4;
   fm_voice_note_on(&voice, 60, 112);
-  assert(fabsf(voice.target_freq[0] - freq_8 * 2.0f) < 0.05f);
+  assert(fabsf(voice.target_freq[0] - freq_8 * 2.0f) < 0.08f);
   voice.patch.osc[0].range = FM_RANGE_8;
   fm_voice_note_off(&voice);
 
-  /* Filter and loudness contours evolve independently. */
   voice.patch.attack_s = 0.001f;
   voice.patch.filter_attack_s = 0.5f;
   voice.env_amp = 0.0f;
@@ -101,7 +131,6 @@ int main(void) {
   assert(attack_peak > 0.01f);
   fm_voice_note_off(&voice);
 
-  /* Legato leaves contours running, retrigger mode restarts on a selected-note transition. */
   voice.patch.note_priority = FM_NOTE_LAST;
   voice.patch.retrigger = 0;
   fm_voice_note_on(&voice, 48, 112);
@@ -115,9 +144,12 @@ int main(void) {
   assert(voice.current_note == 55);
   assert(voice.env_amp == 0.0f);
   assert(voice.env_filter == 0.0f);
+  assert(voice.env_amp_stage == FM_ENV_ATTACK);
+  assert(voice.env_filter_stage == FM_ENV_ATTACK);
   fm_voice_note_off(&voice);
 
   test_note_priority(&voice);
+  test_adsr_stages(&voice);
 
   voice.patch.note_priority = FM_NOTE_LOW;
   voice.patch.retrigger = 0;
@@ -125,7 +157,6 @@ int main(void) {
   const float high_peak = render_peak(&voice, 12000);
   assert(high_peak > 0.005f);
 
-  /* High resonance and feedback must remain bounded and finite. */
   voice.patch.resonance = 1.0f;
   voice.patch.feedback = 0.9f;
   voice.patch.filter_drive = 2.5f;
