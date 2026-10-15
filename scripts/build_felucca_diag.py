@@ -59,11 +59,12 @@ def run(cmd: list[str], *, capture: bool = False) -> str:
     return proc.stdout if capture else ""
 
 
-def find_softfloat_runtime(toolchain: Path, nm: Path) -> Path:
-    """Find the archive that actually defines __subsf3 for pi32v2.
+def find_softfloat_runtime(toolchain: Path) -> Path:
+    """Find an archive containing the pi32v2 soft-float helper symbol.
 
-    Toolchain layouts have changed across JieLi releases, so detect by symbol
-    rather than baking a versioned directory into the project.
+    JieLi toolchain layouts vary and some bundles omit nm. Archive symbol names
+    are stored as ASCII in the ar/object data, so matching __subsf3 in bytes is
+    sufficient for discovery; the linker remains the authority on compatibility.
     """
     candidates: list[Path] = []
     preferred = ("*builtins*.a", "libgcc*.a", "libclang_rt*.a", "*compiler*rt*.a")
@@ -78,11 +79,14 @@ def find_softfloat_runtime(toolchain: Path, nm: Path) -> Path:
             candidates.append(archive)
             seen.add(archive)
 
+    needle = b"__subsf3"
     for archive in candidates:
-        proc = subprocess.run([str(nm), str(archive)], cwd=ROOT, text=True, capture_output=True)
-        if proc.returncode == 0 and re.search(r"\b__subsf3\b", proc.stdout):
-            return archive
-    fail("JieLi toolchain contains no archive defining __subsf3; cannot link float DSP")
+        try:
+            if needle in archive.read_bytes():
+                return archive
+        except OSError:
+            continue
+    fail("JieLi toolchain contains no archive mentioning __subsf3; cannot link float DSP")
 
 
 def main() -> int:
@@ -96,7 +100,6 @@ def main() -> int:
     ld = tc / "pi32v2" / "bin" / "ld"
     objcopy = tc / "common" / "bin" / "objcopy"
     objdump = tc / "common" / "bin" / "objdump"
-    nm = tc / "common" / "bin" / "nm"
 
     hal = felucca / "firmware" / "hal"
     fsrc = felucca / "firmware" / "src"
@@ -136,7 +139,7 @@ def main() -> int:
     link_inputs = list(map(str, objects))
     runtime: Path | None = None
     if synth_check:
-        runtime = find_softfloat_runtime(tc, nm)
+        runtime = find_softfloat_runtime(tc)
         link_inputs.append(str(runtime))
         print(f"softfloat_runtime={runtime}")
 
