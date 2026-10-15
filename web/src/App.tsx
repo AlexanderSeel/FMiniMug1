@@ -55,6 +55,7 @@ export default function App(){
   const [page,setPage]=useState('OSC');
   const [seq,setSeq]=useState(SEQS[0]);
   const [playing,setPlaying]=useState(false);
+  const [activeStep,setActiveStep]=useState(0);
   const [midi,setMidi]=useState('not connected');
 
   const update=(k:keyof Patch,v:Patch[keyof Patch])=>{
@@ -75,17 +76,18 @@ export default function App(){
     return()=>{removeEventListener('keydown',down);removeEventListener('keyup',up)};
   },[patch]);
 
+  useEffect(()=>engine.onMeter(m=>{if(m.step!==undefined)setActiveStep(m.step)}),[]);
   useEffect(()=>()=>engine.stopSequence(),[]);
 
   const toggleSeq=async()=>{
-    if(playing){engine.stopSequence();setPlaying(false);return}
+    if(playing){engine.stopSequence();setPlaying(false);setActiveStep(0);return}
     await engine.startSequence(seq);
-    setPlaying(true);
+    setActiveStep(0);setPlaying(true);
   };
 
   const chooseSequence=async(name:string)=>{
     const next=SEQS.find(x=>x.name===name)!;
-    setSeq(next);
+    setSeq(next);setActiveStep(0);
     if(playing)await engine.startSequence(next);
   };
 
@@ -104,8 +106,8 @@ export default function App(){
     FILTER:<><Knob label="Cutoff" value={patch.cutoff} min={80} max={9000} onChange={v=>update('cutoff',v)} unit="Hz"/><Knob label="Emphasis" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><Knob label="Contour" value={patch.env} min={0} max={7000} onChange={v=>update('env',v)}/><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/></>,
     CONTOUR:<><Knob label="Attack" value={patch.attack} min={.001} max={2} onChange={v=>update('attack',v)} unit="s"/><Knob label="Decay" value={patch.decay} min={.02} max={3} onChange={v=>update('decay',v)} unit="s"/><Knob label="Sustain" value={patch.sustain} min={.01} max={1} onChange={v=>update('sustain',v)}/><Knob label="Release" value={patch.release} min={.02} max={3} onChange={v=>update('release',v)} unit="s"/></>,
     MOD:<><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)}/><Knob label="Res" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><Knob label="Env" value={patch.env} min={0} max={7000} onChange={v=>update('env',v)}/></>,
-    SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} onMouseDown={()=>play(n)} onMouseUp={stop}><small>{i+1}</small>{n}</button>)}</div>
-  })[page],[patch,seq]);
+    SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n)} onMouseUp={stop}><small>{i+1}</small>{n}</button>)}</div>
+  })[page],[patch,seq,playing,activeStep]);
 
   const keys=[48,50,52,53,55,57,59,60,62,64,65,67,69,71,72];
 
