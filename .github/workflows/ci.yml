@@ -42,13 +42,14 @@ jobs:
         run: |
           python3 scripts/generate_params.py
           git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts
-      - name: Compile portable DSP, sequencer, app, browser ABI and UI
+      - name: Compile portable DSP, sequencer, app, diagnostics, browser ABI and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_app.c -o build/fm_app.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_diag.c -o build/fm_diag.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
       - name: Run DSP stability and mono-priority tests
         run: |
