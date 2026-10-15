@@ -21,14 +21,30 @@ static int down(const fm1_input_frame_t *in, fm1_button_t b) {
   return (in->buttons & (1u << (unsigned)b)) != 0;
 }
 
+static uint8_t adjust_range(uint8_t range, int delta) {
+  int v = (int)range + (delta > 0 ? 1 : -1);
+  if (v < FM_RANGE_32) v = FM_RANGE_32;
+  if (v > FM_RANGE_2) v = FM_RANGE_2;
+  return (uint8_t)v;
+}
+
+static const char *range_name(uint8_t range) {
+  static const char *names[] = {"32'", "16'", "8'", "4'", "2'"};
+  return names[range <= FM_RANGE_2 ? range : FM_RANGE_8];
+}
+
 static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
   if (delta == 0 || enc < 0 || enc > 3) return;
   const float fine = ui->hold ? 0.2f : 1.0f;
 
   switch (ui->page) {
     case FM_UI_OSC:
-      if (enc < 3) p->osc[enc].level = clampf(p->osc[enc].level + delta * 0.015f * fine, 0.0f, 1.0f);
-      else p->glide_s = clampf(p->glide_s + delta * 0.005f * fine, 0.0f, 2.0f);
+      if (enc < 3) {
+        if (ui->hold) p->osc[enc].range = adjust_range(p->osc[enc].range, delta);
+        else p->osc[enc].level = clampf(p->osc[enc].level + delta * 0.015f, 0.0f, 1.0f);
+      } else {
+        p->glide_s = clampf(p->glide_s + delta * 0.005f * fine, 0.0f, 2.0f);
+      }
       break;
     case FM_UI_MIX:
       if (enc == 0) p->mixer_drive = clampf(p->mixer_drive + delta * 0.04f * fine, 0.5f, 4.0f);
@@ -43,10 +59,17 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
       if (enc == 3) p->filter_drive = clampf(p->filter_drive + delta * 0.04f * fine, 0.5f, 4.0f);
       break;
     case FM_UI_CONTOUR:
-      if (enc == 0) p->attack_s = clampf(p->attack_s + delta * 0.01f * fine, 0.001f, 10.0f);
-      if (enc == 1) p->decay_s = clampf(p->decay_s + delta * 0.015f * fine, 0.005f, 10.0f);
-      if (enc == 2) p->sustain = clampf(p->sustain + delta * 0.015f * fine, 0.0f, 1.0f);
-      if (enc == 3) p->release_s = clampf(p->release_s + delta * 0.015f * fine, 0.005f, 10.0f);
+      if (ui->hold) {
+        if (enc == 0) p->filter_attack_s = clampf(p->filter_attack_s + delta * 0.01f, 0.001f, 10.0f);
+        if (enc == 1) p->filter_decay_s = clampf(p->filter_decay_s + delta * 0.015f, 0.005f, 10.0f);
+        if (enc == 2) p->filter_sustain = clampf(p->filter_sustain + delta * 0.015f, 0.0f, 1.0f);
+        if (enc == 3) p->filter_release_s = clampf(p->filter_release_s + delta * 0.015f, 0.005f, 10.0f);
+      } else {
+        if (enc == 0) p->attack_s = clampf(p->attack_s + delta * 0.01f, 0.001f, 10.0f);
+        if (enc == 1) p->decay_s = clampf(p->decay_s + delta * 0.015f, 0.005f, 10.0f);
+        if (enc == 2) p->sustain = clampf(p->sustain + delta * 0.015f, 0.0f, 1.0f);
+        if (enc == 3) p->release_s = clampf(p->release_s + delta * 0.015f, 0.005f, 10.0f);
+      }
       break;
     case FM_UI_MOD:
       if (enc == 0) p->drift = clampf(p->drift + delta * 0.015f * fine, 0.0f, 1.0f);
@@ -57,7 +80,10 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
         p->filter_keytrack = (uint8_t)v;
       }
       if (enc == 2 && delta != 0) p->osc[2].low_mode = (uint8_t)!p->osc[2].low_mode;
-      if (enc == 3 && delta != 0) p->osc[2].keyboard_track = (uint8_t)!p->osc[2].keyboard_track;
+      if (enc == 3 && delta != 0) {
+        if (ui->hold) p->retrigger = (uint8_t)!p->retrigger;
+        else p->osc[2].keyboard_track = (uint8_t)!p->osc[2].keyboard_track;
+      }
       break;
     case FM_UI_SEQ:
       if (enc == 0) {
@@ -112,14 +138,17 @@ static void draw_filter_graph(const fm_patch_t *p) {
   fm1_platform_lcd_text(10, 184, "FILTER RESPONSE", COL_DIM);
 }
 
-static void draw_contour_graph(const fm_patch_t *p) {
+static void draw_contour_graph(const fm_patch_t *p, int filter) {
   const int x0 = 9, y0 = 151, w = 222, h = 30;
-  float total = p->attack_s + p->decay_s + p->release_s + 0.35f;
+  const float attack = filter ? p->filter_attack_s : p->attack_s;
+  const float decay = filter ? p->filter_decay_s : p->decay_s;
+  const float sustain = clampf(filter ? p->filter_sustain : p->sustain, 0.0f, 1.0f);
+  const float release = filter ? p->filter_release_s : p->release_s;
+  float total = attack + decay + release + 0.35f;
   if (total < 0.05f) total = 0.05f;
-  float a = clampf(p->attack_s / total, 0.04f, 0.38f);
-  float d = clampf(p->decay_s / total, 0.06f, 0.38f);
-  float r = clampf(p->release_s / total, 0.06f, 0.38f);
-  float sustain = clampf(p->sustain, 0.0f, 1.0f);
+  float a = clampf(attack / total, 0.04f, 0.38f);
+  float d = clampf(decay / total, 0.06f, 0.38f);
+  float r = clampf(release / total, 0.06f, 0.38f);
   float sustain_start = a + d;
   float release_start = 1.0f - r;
   if (release_start < sustain_start + 0.08f) release_start = sustain_start + 0.08f;
@@ -140,9 +169,9 @@ static void draw_contour_graph(const fm_patch_t *p) {
     }
     int px = x0 + i * 3;
     int py = y0 + h - 2 - (int)(clampf(level, 0.0f, 1.0f) * (float)(h - 4));
-    fm1_platform_lcd_rect(px, py, 2, 2, COL_ACCENT);
+    fm1_platform_lcd_rect(px, py, 2, 2, filter ? COL_RED : COL_ACCENT);
   }
-  fm1_platform_lcd_text(10, 184, "A       D       S       R", COL_DIM);
+  fm1_platform_lcd_text(10, 184, filter ? "FILTER CONTOUR / HOLD" : "LOUDNESS CONTOUR", COL_DIM);
 }
 
 void fm_ui_init(fm_ui_state_t *ui) {
@@ -181,11 +210,19 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
 
   switch (ui->page) {
     case FM_UI_OSC:
-      label[0] = "OSC 1"; label[1] = "OSC 2"; label[2] = "OSC 3"; label[3] = "GLIDE";
-      snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->osc[0].level * 100));
-      snprintf(value[1], sizeof(value[1]), "%d%%", (int)(p->osc[1].level * 100));
-      snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->osc[2].level * 100));
-      snprintf(value[3], sizeof(value[3]), "%.2fs", p->glide_s);
+      if (ui->hold) {
+        label[0] = "OSC1 RNG"; label[1] = "OSC2 RNG"; label[2] = "OSC3 RNG"; label[3] = "GLIDE FINE";
+        snprintf(value[0], sizeof(value[0]), "%s", range_name(p->osc[0].range));
+        snprintf(value[1], sizeof(value[1]), "%s", range_name(p->osc[1].range));
+        snprintf(value[2], sizeof(value[2]), "%s", range_name(p->osc[2].range));
+        snprintf(value[3], sizeof(value[3]), "%.3fs", p->glide_s);
+      } else {
+        label[0] = "OSC 1"; label[1] = "OSC 2"; label[2] = "OSC 3"; label[3] = "GLIDE";
+        snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->osc[0].level * 100));
+        snprintf(value[1], sizeof(value[1]), "%d%%", (int)(p->osc[1].level * 100));
+        snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->osc[2].level * 100));
+        snprintf(value[3], sizeof(value[3]), "%.2fs", p->glide_s);
+      }
       break;
     case FM_UI_MIX:
       label[0] = "DRIVE"; label[1] = "FEEDBACK"; label[2] = "OSC2 FINE"; label[3] = "OSC3 FINE";
@@ -202,18 +239,26 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
       snprintf(value[3], sizeof(value[3]), "%.2fx", p->filter_drive);
       break;
     case FM_UI_CONTOUR:
-      label[0] = "ATTACK"; label[1] = "DECAY"; label[2] = "SUSTAIN"; label[3] = "RELEASE";
-      snprintf(value[0], sizeof(value[0]), "%.2fs", p->attack_s);
-      snprintf(value[1], sizeof(value[1]), "%.2fs", p->decay_s);
-      snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->sustain * 100));
-      snprintf(value[3], sizeof(value[3]), "%.2fs", p->release_s);
+      if (ui->hold) {
+        label[0] = "F ATTACK"; label[1] = "F DECAY"; label[2] = "F SUSTAIN"; label[3] = "F RELEASE";
+        snprintf(value[0], sizeof(value[0]), "%.2fs", p->filter_attack_s);
+        snprintf(value[1], sizeof(value[1]), "%.2fs", p->filter_decay_s);
+        snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->filter_sustain * 100));
+        snprintf(value[3], sizeof(value[3]), "%.2fs", p->filter_release_s);
+      } else {
+        label[0] = "A ATTACK"; label[1] = "A DECAY"; label[2] = "A SUSTAIN"; label[3] = "A RELEASE";
+        snprintf(value[0], sizeof(value[0]), "%.2fs", p->attack_s);
+        snprintf(value[1], sizeof(value[1]), "%.2fs", p->decay_s);
+        snprintf(value[2], sizeof(value[2]), "%d%%", (int)(p->sustain * 100));
+        snprintf(value[3], sizeof(value[3]), "%.2fs", p->release_s);
+      }
       break;
     case FM_UI_MOD:
-      label[0] = "DRIFT"; label[1] = "KEY TRACK"; label[2] = "OSC3 LO"; label[3] = "OSC3 KBD";
+      label[0] = "DRIFT"; label[1] = "KEY TRACK"; label[2] = "OSC3 LO"; label[3] = ui->hold ? "RETRIGGER" : "OSC3 KBD";
       snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->drift * 100));
       snprintf(value[1], sizeof(value[1]), "%s", p->filter_keytrack == 0 ? "OFF" : p->filter_keytrack == 1 ? "1/3" : p->filter_keytrack == 2 ? "2/3" : "FULL");
       snprintf(value[2], sizeof(value[2]), "%s", p->osc[2].low_mode ? "ON" : "OFF");
-      snprintf(value[3], sizeof(value[3]), "%s", p->osc[2].keyboard_track ? "ON" : "OFF");
+      snprintf(value[3], sizeof(value[3]), "%s", ui->hold ? (p->retrigger ? "ON" : "LEGATO") : (p->osc[2].keyboard_track ? "ON" : "OFF"));
       break;
     case FM_UI_SEQ:
     default:
@@ -236,13 +281,13 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
     const int i = ui->focus_encoder;
     fm1_platform_lcd_text(16, 72, label[i], COL_DIM);
     fm1_platform_lcd_text(16, 112, value[i], COL_ACCENT);
-    fm1_platform_lcd_text(16, 172, ui->hold ? "HOLD: FINE" : "PRESS KNOB: BACK", COL_TEXT);
+    fm1_platform_lcd_text(16, 172, ui->hold ? "HOLD: SECONDARY" : "PRESS KNOB: BACK", COL_TEXT);
   } else {
     for (int i = 0; i < 4; ++i) draw_value(8 + i * 56, 66, label[i], value[i], 0);
     fm1_platform_lcd_text(8, 136, "ENC1      ENC2      ENC3      ENC4", COL_DIM);
     if (ui->page == FM_UI_FILTER) draw_filter_graph(p);
-    else if (ui->page == FM_UI_CONTOUR) draw_contour_graph(p);
-    else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / FINE" : "PRESS ENCODER = FOCUS", COL_TEXT);
+    else if (ui->page == FM_UI_CONTOUR) draw_contour_graph(p, ui->hold);
+    else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / SECONDARY" : "PRESS ENCODER = FOCUS", COL_TEXT);
   }
 
   if (ui->playing) fm1_platform_lcd_rect(215, 8, 16, 8, COL_RED);
