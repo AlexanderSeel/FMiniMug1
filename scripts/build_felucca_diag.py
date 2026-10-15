@@ -33,9 +33,9 @@ def fail(message: str) -> "None":
 def require_tree() -> tuple[Path, Path]:
     felucca = Path(os.environ.get("FELUCCA_SRC", "")).expanduser()
     toolchain = Path(os.environ.get("JIELI_TOOLCHAIN", "")).expanduser()
-    if not felucca or not (felucca / "firmware" / "app.ld").is_file():
+    if not (felucca / "firmware" / "app.ld").is_file():
         fail("FELUCCA_SRC must point to a Felucca checkout containing firmware/app.ld")
-    if not toolchain or not (toolchain / "pi32v2" / "bin" / "clang").is_file():
+    if not (toolchain / "pi32v2" / "bin" / "clang").is_file():
         fail("JIELI_TOOLCHAIN must contain pi32v2/bin/clang")
     return felucca.resolve(), toolchain.resolve()
 
@@ -64,19 +64,19 @@ def main() -> int:
     portable = ROOT / "firmware" / "src"
 
     required = [
-        fw / "crt0.S", hal / "fm1_vec.S", hal / "fm1_isr.S",
-        fsrc / "libc.c", fw / "app.ld",
+        fw / "crt0.S", hal / "fm1_vec.S", hal / "fm1_isr.S", fw / "app.ld",
+        target / "fm1_minilibc.c",
     ]
     missing = [str(p) for p in required if not p.is_file()]
     if missing:
-        fail("Felucca checkout is missing: " + ", ".join(missing))
+        fail("target inputs are missing: " + ", ".join(missing))
 
     OUT.mkdir(parents=True, exist_ok=True)
     inc = [f"-I{hal}", f"-I{fsrc}", f"-I{ROOT / 'firmware' / 'include'}", f"-I{target}"]
 
     asm_sources = [fw / "crt0.S", hal / "fm1_vec.S", hal / "fm1_isr.S"]
     c_sources = [
-        fsrc / "libc.c",
+        target / "fm1_minilibc.c",
         portable / "fm_diag.c",
         target / "fm1_lcd_bridge.c",
         target / "fm1_platform_felucca.c",
@@ -145,7 +145,6 @@ def main() -> int:
     if image[:4] != bytes.fromhex("04818000"):
         fail(f"unexpected entry stub {image[:4].hex()} (expected 04818000)")
 
-    # Felucca app.ld XIP region length is the hard standalone application bound.
     ld_text = (fw / "app.ld").read_text()
     m = re.search(r"XIP\s*\(rx\)\s*:\s*ORIGIN\s*=\s*0x[0-9A-Fa-f]+,\s*LENGTH\s*=\s*(0x[0-9A-Fa-f]+|\d+)", ld_text)
     if not m:
@@ -154,7 +153,6 @@ def main() -> int:
     if len(image) > max_image:
         fail(f"image {len(image)} B exceeds linker XIP region {max_image} B")
 
-    # No direct calls/loads into the chip ROM window are allowed.
     rom_refs = []
     for line in dis.splitlines():
         if "call" not in line and "=" not in line:
