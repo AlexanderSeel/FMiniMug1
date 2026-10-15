@@ -8,6 +8,14 @@ typedef enum {
   FM_WAVE_PULSE
 } fm_wave_t;
 
+typedef enum {
+  FM_RANGE_32 = 0,
+  FM_RANGE_16,
+  FM_RANGE_8,
+  FM_RANGE_4,
+  FM_RANGE_2
+} fm_osc_range_t;
+
 typedef struct {
   fm_wave_t wave;
   float level;
@@ -15,6 +23,7 @@ typedef struct {
   float fine_cents;
   uint8_t keyboard_track;
   uint8_t low_mode;
+  uint8_t range;
 } fm_osc_params_t;
 
 typedef struct {
@@ -22,10 +31,19 @@ typedef struct {
   float cutoff_hz;
   float resonance;
   float filter_env_amount;
+
+  /* Loudness contour. Existing parameter IDs 12..15 continue to address it. */
   float attack_s;
   float decay_s;
   float sustain;
   float release_s;
+
+  /* Independent filter contour. */
+  float filter_attack_s;
+  float filter_decay_s;
+  float filter_sustain;
+  float filter_release_s;
+
   float glide_s;
   float mixer_drive;
   float filter_drive;
@@ -35,6 +53,8 @@ typedef struct {
   uint8_t filter_keytrack;
   /* Oversample the oscillator/mixer/ladder path two times. */
   uint8_t oversample_2x;
+  /* 0 = legato does not restart contours, 1 = every note-on retriggers. */
+  uint8_t retrigger;
 } fm_patch_t;
 
 typedef struct {
