@@ -76,7 +76,10 @@ export default function App(){
     return()=>{removeEventListener('keydown',down);removeEventListener('keyup',up)};
   },[patch]);
 
-  useEffect(()=>engine.onMeter(m=>{if(m.step!==undefined)setActiveStep(m.step)}),[]);
+  useEffect(()=>{
+    const off=engine.onMeter(m=>{if(m.step!==undefined)setActiveStep(m.step)});
+    return()=>{off()};
+  },[]);
   useEffect(()=>()=>engine.stopSequence(),[]);
 
   const toggleSeq=async()=>{
