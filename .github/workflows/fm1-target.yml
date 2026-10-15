@@ -1,0 +1,48 @@
+name: FM-1 Target Diagnostic
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  jieli-diagnostic-link:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Felucca HAL reference
+        run: |
+          git clone --depth 1 https://github.com/hugelton/Felucca.git /tmp/felucca
+          git -C /tmp/felucca rev-parse HEAD
+
+      - name: Install JieLi pi32v2 toolchain
+        run: |
+          sh /tmp/felucca/tools/get_toolchain.sh /tmp/jieli
+          test -x /tmp/jieli/toolchain/pi32v2/bin/clang
+          /tmp/jieli/toolchain/pi32v2/bin/clang --version || true
+
+      - name: Build standalone non-installable FM-1 diagnostic image
+        env:
+          FELUCCA_SRC: /tmp/felucca
+          JIELI_TOOLCHAIN: /tmp/jieli/toolchain
+        run: |
+          python3 -m py_compile scripts/build_felucca_diag.py
+          python3 scripts/build_felucca_diag.py
+
+      - name: Verify target artifacts and safety gates
+        run: |
+          test -s build/felucca-target/fminimug1-diag.elf
+          test -s build/felucca-target/fminimug1-diag.bin
+          test -s build/felucca-target/fminimug1-diag.dis
+          test -s build/felucca-target/SHA256SUMS
+          test -s build/felucca-target/BUILD-INFO.txt
+          grep -q '^installable=no$' build/felucca-target/BUILD-INFO.txt
+          grep -q '^flash_write_api=disabled$' build/felucca-target/BUILD-INFO.txt
+          if find build/felucca-target -type f -name '*.fwsc' | grep -q .; then
+            echo 'safety failure: diagnostic target generated an install package' >&2
+            exit 1
+          fi
+
+      - name: Print target build summary
+        run: cat build/felucca-target/BUILD-INFO.txt
