@@ -40,13 +40,13 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] FOCUS mode: one large parameter + encoder fine mode.
 - [x] HOLD fine-adjustment layer.
 - [x] Host UI interaction tests with fake FM-1 platform.
+- [x] Add compact live cutoff/resonance response graph to FILTER.
+- [x] Add compact ADSR contour graph to CONTOUR.
+- [x] Generate browser/C parameter IDs from one shared manifest so mappings cannot drift.
 - [ ] Port Felucca-compatible display/HAL implementation behind `fm1_platform.h`.
-- [ ] Add live cutoff/resonance response graph to FILTER.
-- [ ] Add dual envelope graphs to CONTOUR.
 - [ ] Add 16-step viewport and scrolling 64-step patterns to SEQ/PERF.
 - [ ] Complete hardware HOLD shortcuts for oscillator range/wave, key tracking and performance actions.
 - [ ] Verify physical encoder/button IDs on real FM-1 diagnostic screen.
-- [ ] Generate browser parameter IDs from the native parameter definition so mappings cannot drift.
 
 ## Milestone 3 — Native DSP engine 🚧
 - [x] PolyBLEP band-limited saw/pulse/square oscillators.
@@ -116,6 +116,7 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Host DSP stability tests.
 - [x] Host UI interaction/mapping tests.
 - [x] Compile-check browser native-DSP ABI in CI.
+- [x] CI verifies generated browser/native parameter protocol files are synchronized.
 - [x] Production web + WASM build in CI.
 - [ ] Golden audio render regression suite.
 - [ ] UI clipping/overlap snapshot tests at 240×240.
