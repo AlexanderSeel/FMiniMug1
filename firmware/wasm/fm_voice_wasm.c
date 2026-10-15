@@ -1,4 +1,5 @@
 #include "fm_voice.h"
+#include "fm_params.h"
 #include <stdint.h>
 
 /* Small stable ABI used by the browser AudioWorklet. Keep this wrapper dumb:
@@ -7,32 +8,6 @@
 static fm_voice_t voice;
 static float output[128];
 static int initialized;
-
-enum {
-    FMM_OSC1_LEVEL = 0,
-    FMM_OSC2_LEVEL,
-    FMM_OSC3_LEVEL,
-    FMM_OSC1_WAVE,
-    FMM_OSC2_WAVE,
-    FMM_OSC3_WAVE,
-    FMM_OSC1_SEMITONES,
-    FMM_OSC2_SEMITONES,
-    FMM_OSC3_SEMITONES,
-    FMM_CUTOFF_HZ,
-    FMM_RESONANCE,
-    FMM_FILTER_ENV,
-    FMM_ATTACK,
-    FMM_DECAY,
-    FMM_SUSTAIN,
-    FMM_RELEASE,
-    FMM_GLIDE,
-    FMM_MIXER_DRIVE,
-    FMM_FILTER_DRIVE,
-    FMM_DRIFT,
-    FMM_FEEDBACK,
-    FMM_FILTER_KEYTRACK,
-    FMM_OVERSAMPLE_2X
-};
 
 static fm_wave_t wave_from_number(float v) {
     int n = (int)v;
@@ -58,7 +33,7 @@ void fmm_reset(void) {
 __attribute__((visibility("default")))
 void fmm_set_param(int id, float value) {
     if (!initialized) fmm_init(48000.0f);
-    switch (id) {
+    switch ((fmm_param_id_t)id) {
         case FMM_OSC1_LEVEL: voice.patch.osc[0].level = value; break;
         case FMM_OSC2_LEVEL: voice.patch.osc[1].level = value; break;
         case FMM_OSC3_LEVEL: voice.patch.osc[2].level = value; break;
@@ -82,7 +57,7 @@ void fmm_set_param(int id, float value) {
         case FMM_FEEDBACK: voice.patch.feedback = value; break;
         case FMM_FILTER_KEYTRACK: voice.patch.filter_keytrack = (uint8_t)value; break;
         case FMM_OVERSAMPLE_2X: voice.patch.oversample_2x = value >= 0.5f; break;
-        default: break;
+        case FMM_PARAM_COUNT: break;
     }
 }
 
