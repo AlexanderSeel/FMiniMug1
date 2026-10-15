@@ -18,7 +18,16 @@ export type Patch={
   drift:number;
 };
 
-export type Sequence={name:string;bpm:number;notes:number[];gates:number[]};
+export type Sequence={
+  name:string;
+  bpm:number;
+  notes:number[];
+  gates:number[];
+  swing?:number;
+  velocities?:number[];
+  transpose?:number[];
+  flags?:number[];
+};
 
 /*
  * Original FMiniMug1 parameter sets. Names describe classic Minimoog sound
