@@ -4,7 +4,7 @@ FMiniMug1 is an open-source, Minimoog-inspired virtual-analog synthesizer projec
 
 The goal is not to clone Moog branding or proprietary artwork. It is to translate the classic three-oscillator + mixer + transistor-ladder workflow to the FM-1's 240×240 display, keyboard, encoders and buttons, while adding a matching browser controller/emulator, original classic-style patches, performance sequences and a recovery-first installation path.
 
-> **Status:** active prototype. The portable native DSP and 240×240 UI state machine are implemented and host-tested; the browser controller/emulator is runnable; the real JieLi/Felucca-backed FM-1 platform adapter and safe `.fwsc` package are the next hardware milestones.
+> **Status:** active prototype. The portable native DSP and 240×240 UI state machine are implemented and host-tested. The browser can now run that same C DSP through WebAssembly + AudioWorklet. The real JieLi/Felucca-backed FM-1 platform adapter and safe `.fwsc` package remain the next hardware milestones.
 
 ## Implemented now
 
@@ -13,17 +13,21 @@ The goal is not to clone Moog branding or proprietary artwork. It is to translat
 - Nonlinear mixer, feedback path and nonlinear four-stage ladder-style filter.
 - Optional 2× oscillator/mixer/filter oversampling.
 - Resonance compensation and bounded high-resonance stress testing.
-- Glide, velocity, analog drift and filter keyboard tracking.
+- Glide, velocity, deterministic analog drift and filter keyboard tracking.
 - OSC3 keyboard-control-off and low-frequency mode foundation.
 - Portable six-page 240×240 FM-1 UI renderer.
 - OSC / MIX / FILTER / CONTOUR / MOD / SEQ-PERF pages.
 - Four encoder mappings, HOLD fine mode and encoder-press FOCUS mode.
 - Abstract FM-1 platform API for display, controls, LEDs, audio, flash and MIDI.
-- Browser controller/emulator with Web Audio, Web MIDI connection, keyboard play and sequence playback.
+- Native C DSP browser ABI compiled by Emscripten to `fminimug1.wasm`.
+- AudioWorklet rendering the native DSP in 128-frame real-time blocks.
+- Automatic Web Audio fallback when WASM/AudioWorklet is unavailable.
+- Browser oscilloscope, spectrum display and peak/RMS meters with active-engine indicator.
+- Web MIDI connection groundwork, keyboard play and sequence playback.
 - **32 original classic-style patches** across bass, lead, brass, keys, sequence, SFX, drone and percussion categories.
 - **12 selectable sequences** spanning Berlin-school, funk, prog, motorik, electro, slow/ambient and demonstration patterns.
 - Native DSP stability tests and UI interaction tests in CI.
-- Production browser build in CI.
+- Production browser + native WASM build in CI.
 
 ## Product direction
 
@@ -35,16 +39,17 @@ The goal is not to clone Moog branding or proprietary artwork. It is to translat
 - Analog-character controls: drift, component spread, mixer drive, filter drive and asymmetry.
 - 240×240 hardware UI inspired by the information hierarchy of a Minimoog panel rather than copying its artwork.
 - Browser controller with the same parameter/page model as hardware.
-- Native DSP/UI compiled to WASM as the long-term canonical browser emulator.
+- Native 240×240 UI renderer compiled to WASM/canvas for pixel-identical hardware preview.
 - 64+ original patches and 32+ sequences.
 - Web/CLI installer and verified return-to-stock/recovery workflows.
 
 ## Repository layout
 
 ```text
-firmware/            portable synth engine, UI and FM-1 platform boundary
+firmware/            portable synth engine, UI, WASM ABI and FM-1 platform boundary
 tests/               host DSP/UI tests
-web/                 React browser controller + current Web Audio emulator
+scripts/             native/WASM build helpers
+web/                 React browser controller + AudioWorklet/WASM emulator
 docs/                FM-1/Felucca port and architecture notes
 installer/           installer/recovery integration notes
 .github/workflows/   CI
@@ -52,20 +57,37 @@ installer/           installer/recovery integration notes
 
 ## Browser emulator / controller
 
+For the lightweight development UI, Web Audio fallback works without Emscripten:
+
 ```bash
 cd web
 npm install
 npm run dev
 ```
 
-The web app currently provides:
+For the canonical native-DSP emulator install Emscripten (`emcc`) and run:
 
-1. **Emulator mode** – Web Audio approximation of the FMiniMug1 signal path, playable from the computer/on-screen keyboard.
-2. **FM-1 controller groundwork** – Web MIDI connection and the same six panel sections used by the native UI model.
-3. **Patch browser** – 32 original parameter sets.
-4. **Sequence browser** – 12 selectable 16-step musical/demo patterns.
+```bash
+cd web
+npm install
+npm run dev:native
+```
 
-The next audio-parity step is to replace the browser's Biquad/Web Audio approximation with the native DSP compiled to AudioWorklet/WASM.
+A production build always builds the native DSP first:
+
+```bash
+cd web
+npm run build
+```
+
+The browser currently provides:
+
+1. **Native emulator mode** – the same `firmware/src/fm_voice.c` engine used by the firmware target is compiled to WASM and rendered inside an AudioWorklet.
+2. **Graceful fallback mode** – the original Web Audio approximation remains available if the native module cannot be loaded; the UI clearly identifies which engine is active.
+3. **DSP diagnostics** – waveform, frequency spectrum, peak and RMS monitoring for filter/resonance/drive tuning.
+4. **FM-1 controller groundwork** – Web MIDI connection and the same six panel sections used by the native UI model.
+5. **Patch browser** – 32 original parameter sets.
+6. **Sequence browser** – 12 selectable 16-step musical/demo patterns.
 
 ## Hardware direction
 
@@ -99,8 +121,10 @@ The original Minimoog Model D did not have preset memory, so references to “fa
 CI currently verifies:
 
 ```text
-web production build
+native WASM generation with Emscripten
+web production build including worklet/WASM assets
 portable C DSP compilation
+browser DSP ABI compilation
 DSP finite/bounded-output stress tests
 portable 240×240 UI compilation
 UI interaction/mapping tests
@@ -117,5 +141,3 @@ Custom firmware can brick hardware. The repository intentionally does **not** ye
 - M-VAVE/FM-1 are trademarks of their respective owners.
 - Minimoog/Moog are trademarks of Moog Music / their respective owners. FMiniMug1 is not affiliated with or endorsed by Moog.
 - Felucca by Hügelton Instruments is an important technical reference for the FM-1 platform.
-
-See `plan.md` for milestones and implementation status.
