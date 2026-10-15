@@ -21,7 +21,7 @@ static void seq_event(const fm_seq_event_t *event, void *user) {
   if (event->type == FM_SEQ_EVENT_NOTE_ON) {
     fm_voice_note_on(&app->voice, event->note, event->velocity);
   } else if (event->type == FM_SEQ_EVENT_NOTE_OFF) {
-    /* Sequencer events are a monophonic transport lane, not physical held keys. */
+    /* Sequencer events own the mono transport lane while PLAY is active. */
     fm_voice_note_off(&app->voice);
   }
 }
@@ -57,18 +57,34 @@ void fm_app_handle_input(fm_app_t *app, const fm1_input_frame_t *input) {
 
   fm_ui_handle_input(&app->ui, &app->voice.patch, input);
 
-  for (uint8_t i = 0; i < 27u; ++i) {
-    const uint32_t mask = 1u << i;
-    const int note = clamp_midi(FM1_FIRST_MIDI_NOTE + (int)i + (int)app->octave_shift * 12);
-    if (input->note_pressed & mask) fm_voice_note_on(&app->voice, (uint8_t)note, 112u);
-    if (input->note_released & mask) fm_voice_note_off_note(&app->voice, (uint8_t)note);
+  /* The physical keyboard is a performance keyboard while stopped. Once PLAY
+   * owns the mono voice, note keys are reserved for future sequence transpose
+   * and do not contaminate the sequencer's held-note state. */
+  if (!app->ui.playing) {
+    for (uint8_t i = 0; i < 27u; ++i) {
+      const uint32_t mask = 1u << i;
+      if (input->note_pressed & mask) {
+        const int note = clamp_midi(FM1_FIRST_MIDI_NOTE + (int)i + (int)app->octave_shift * 12);
+        app->key_midi[i] = (uint8_t)note;
+        app->key_down |= mask;
+        fm_voice_note_on(&app->voice, (uint8_t)note, 112u);
+      }
+      if (input->note_released & mask) {
+        if (app->key_down & mask) fm_voice_note_off_note(&app->voice, app->key_midi[i]);
+        app->key_down &= ~mask;
+      }
+    }
   }
 
   if (app->ui.playing != app->last_playing) {
-    if (app->ui.playing && app->sequence_loaded) fm_seq_start(&app->sequencer);
-    else {
+    if (app->ui.playing && app->sequence_loaded) {
+      /* Transfer ownership cleanly from physical keys to the sequence lane. */
+      fm_voice_note_off(&app->voice);
+      app->key_down = 0u;
+      fm_seq_start(&app->sequencer);
+    } else {
       fm_seq_stop(&app->sequencer);
-      if (app->last_playing) fm_voice_note_off(&app->voice);
+      fm_voice_note_off(&app->voice);
     }
     app->last_playing = app->ui.playing;
   }
