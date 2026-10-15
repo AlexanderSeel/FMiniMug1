@@ -28,9 +28,21 @@ static uint8_t adjust_range(uint8_t range, int delta) {
   return (uint8_t)v;
 }
 
+static uint8_t adjust_priority(uint8_t priority, int delta) {
+  int v = (int)priority + (delta > 0 ? 1 : -1);
+  if (v < FM_NOTE_LOW) v = FM_NOTE_LOW;
+  if (v > FM_NOTE_LAST) v = FM_NOTE_LAST;
+  return (uint8_t)v;
+}
+
 static const char *range_name(uint8_t range) {
   static const char *names[] = {"32'", "16'", "8'", "4'", "2'"};
   return names[range <= FM_RANGE_2 ? range : FM_RANGE_8];
+}
+
+static const char *priority_name(uint8_t priority) {
+  static const char *names[] = {"LOW", "HIGH", "LAST"};
+  return names[priority <= FM_NOTE_LAST ? priority : FM_NOTE_LOW];
 }
 
 static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
@@ -72,7 +84,10 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
       }
       break;
     case FM_UI_MOD:
-      if (enc == 0) p->drift = clampf(p->drift + delta * 0.015f * fine, 0.0f, 1.0f);
+      if (enc == 0) {
+        if (ui->hold) p->note_priority = adjust_priority(p->note_priority, delta);
+        else p->drift = clampf(p->drift + delta * 0.015f, 0.0f, 1.0f);
+      }
       if (enc == 1) {
         int v = (int)p->filter_keytrack + (delta > 0 ? 1 : -1);
         if (v < 0) v = 0;
@@ -254,8 +269,10 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
       }
       break;
     case FM_UI_MOD:
-      label[0] = "DRIFT"; label[1] = "KEY TRACK"; label[2] = "OSC3 LO"; label[3] = ui->hold ? "RETRIGGER" : "OSC3 KBD";
-      snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->drift * 100));
+      label[0] = ui->hold ? "PRIORITY" : "DRIFT";
+      label[1] = "KEY TRACK"; label[2] = "OSC3 LO"; label[3] = ui->hold ? "RETRIGGER" : "OSC3 KBD";
+      if (ui->hold) snprintf(value[0], sizeof(value[0]), "%s", priority_name(p->note_priority));
+      else snprintf(value[0], sizeof(value[0]), "%d%%", (int)(p->drift * 100));
       snprintf(value[1], sizeof(value[1]), "%s", p->filter_keytrack == 0 ? "OFF" : p->filter_keytrack == 1 ? "1/3" : p->filter_keytrack == 2 ? "2/3" : "FULL");
       snprintf(value[2], sizeof(value[2]), "%s", p->osc[2].low_mode ? "ON" : "OFF");
       snprintf(value[3], sizeof(value[3]), "%s", ui->hold ? (p->retrigger ? "ON" : "LEGATO") : (p->osc[2].keyboard_track ? "ON" : "OFF"));
