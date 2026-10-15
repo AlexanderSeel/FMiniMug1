@@ -108,6 +108,14 @@ void fm_seq_process(fm_seq_t *seq, uint32_t frames, fm_seq_event_cb cb, void *us
       seq->gate_samples = gate_samples_for(step, seq->step_samples);
       emit(cb, user, FM_SEQ_EVENT_STEP, offset, seq->step_index, 0u, 0u, step->flags);
 
+      /* A tie keeps the previous note alive across a boundary. If the next
+       * step is a rest, that held note must end exactly at the rest boundary. */
+      if (step->note < 0 && seq->note_active) {
+        emit(cb, user, FM_SEQ_EVENT_NOTE_OFF, offset, seq->step_index,
+             seq->active_note, 0u, step->flags);
+        seq->note_active = 0u;
+      }
+
       if (step->note >= 0) {
         int note = (int)step->note + (int)step->transpose;
         if (note < 0) note = 0;
