@@ -1,0 +1,29 @@
+#pragma once
+/* Generated from shared/params.json. Do not edit by hand. */
+
+typedef enum {
+  FMM_OSC1_LEVEL = 0,
+  FMM_OSC2_LEVEL = 1,
+  FMM_OSC3_LEVEL = 2,
+  FMM_OSC1_WAVE = 3,
+  FMM_OSC2_WAVE = 4,
+  FMM_OSC3_WAVE = 5,
+  FMM_OSC1_SEMITONES = 6,
+  FMM_OSC2_SEMITONES = 7,
+  FMM_OSC3_SEMITONES = 8,
+  FMM_CUTOFF_HZ = 9,
+  FMM_RESONANCE = 10,
+  FMM_FILTER_ENV = 11,
+  FMM_ATTACK = 12,
+  FMM_DECAY = 13,
+  FMM_SUSTAIN = 14,
+  FMM_RELEASE = 15,
+  FMM_GLIDE = 16,
+  FMM_MIXER_DRIVE = 17,
+  FMM_FILTER_DRIVE = 18,
+  FMM_DRIFT = 19,
+  FMM_FEEDBACK = 20,
+  FMM_FILTER_KEYTRACK = 21,
+  FMM_OVERSAMPLE_2X = 22,
+  FMM_PARAM_COUNT
+} fmm_param_id_t;
