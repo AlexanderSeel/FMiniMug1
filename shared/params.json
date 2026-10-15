@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "parameters": [
     {"id":0,"c":"FMM_OSC1_LEVEL","ts":"osc1Level"},
     {"id":1,"c":"FMM_OSC2_LEVEL","ts":"osc2Level"},
@@ -31,6 +31,7 @@
     {"id":27,"c":"FMM_FILTER_DECAY","ts":"filterDecay"},
     {"id":28,"c":"FMM_FILTER_SUSTAIN","ts":"filterSustain"},
     {"id":29,"c":"FMM_FILTER_RELEASE","ts":"filterRelease"},
-    {"id":30,"c":"FMM_RETRIGGER","ts":"retrigger"}
+    {"id":30,"c":"FMM_RETRIGGER","ts":"retrigger"},
+    {"id":31,"c":"FMM_NOTE_PRIORITY","ts":"notePriority"}
   ]
 }
