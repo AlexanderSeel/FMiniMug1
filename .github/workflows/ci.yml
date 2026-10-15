@@ -18,15 +18,20 @@ jobs:
       - run: npm install
       - run: npm run build
 
-  portable-dsp:
+  portable-native:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Compile portable DSP
+      - name: Compile portable DSP and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
       - name: Run DSP stability tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c tests/test_dsp.c -lm -o build/test_dsp
           ./build/test_dsp
+      - name: Run UI interaction tests
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_ui.c tests/test_ui.c -lm -o build/test_ui
+          ./build/test_ui
