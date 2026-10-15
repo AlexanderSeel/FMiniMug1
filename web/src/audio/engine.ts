@@ -192,25 +192,39 @@ export class MiniEngine {
     this.stopSequence();
     this.applyPatch(this.patch);
     if(this.node){
-      this.node.port.postMessage({type:'sequence',bpm:seq.bpm,swing:0,notes:seq.notes,gates:seq.gates});
+      this.node.port.postMessage({
+        type:'sequence',bpm:seq.bpm,swing:seq.swing??0,notes:seq.notes,gates:seq.gates,
+        velocities:seq.velocities,transpose:seq.transpose,flags:seq.flags
+      });
       this.node.port.postMessage({type:'seqStart'});
       return;
     }
+
     this.fallbackStep=0;
     const tick=()=>{
       const i=this.fallbackStep++%seq.notes.length;
       const note=seq.notes[i];
-      this.fallback?.noteOn(note,this.patch,this.ranges,this.filterContour,this.glideMode);
+      const transpose=seq.transpose?.[i]??0;
+      const baseStepMs=60000/seq.bpm/4;
+      const swingAmount=(seq.swing??0)/200;
+      const stepMs=baseStepMs*(i%2===0?1+swingAmount:1-swingAmount);
+
+      if(note>=0)this.fallback?.noteOn(note+transpose,this.patch,this.ranges,this.filterContour,this.glideMode);
+      else this.fallback?.stop(this.patch,this.ampDecaySwitch);
+
       if(this.fallbackGateTimer!==undefined)clearTimeout(this.fallbackGateTimer);
-      this.fallbackGateTimer=window.setTimeout(()=>this.fallback?.stop(this.patch,this.ampDecaySwitch),60000/seq.bpm*seq.gates[i]);
+      if(note>=0){
+        const gate=Math.max(.01,Math.min(1,seq.gates[i]??.7));
+        this.fallbackGateTimer=window.setTimeout(()=>this.fallback?.stop(this.patch,this.ampDecaySwitch),stepMs*gate);
+      }
+      this.fallbackTimer=window.setTimeout(tick,stepMs);
     };
     tick();
-    this.fallbackTimer=window.setInterval(tick,60000/seq.bpm);
   }
 
   stopSequence(){
     if(this.node)this.node.port.postMessage({type:'seqStop'});
-    if(this.fallbackTimer!==undefined){clearInterval(this.fallbackTimer);this.fallbackTimer=undefined}
+    if(this.fallbackTimer!==undefined){clearTimeout(this.fallbackTimer);this.fallbackTimer=undefined}
     if(this.fallbackGateTimer!==undefined){clearTimeout(this.fallbackGateTimer);this.fallbackGateTimer=undefined}
     this.fallback?.stop(this.patch,this.ampDecaySwitch);
   }
