@@ -22,6 +22,13 @@ typedef enum {
   FM_NOTE_LAST
 } fm_note_priority_t;
 
+typedef enum {
+  FM_ENV_ATTACK = 0,
+  FM_ENV_DECAY,
+  FM_ENV_SUSTAIN,
+  FM_ENV_RELEASE
+} fm_env_stage_t;
+
 typedef struct {
   fm_wave_t wave;
   float level;
@@ -79,6 +86,8 @@ typedef struct {
   float gate;
   float velocity;
   uint8_t current_note;
+  uint8_t env_amp_stage;
+  uint8_t env_filter_stage;
   uint64_t held_notes[2];
   uint16_t held_order[128];
   uint16_t note_serial;
@@ -102,6 +111,7 @@ typedef struct {
   float cache_glide_s;
   uint8_t cache_keytrack;
   uint8_t cache_keynote;
+  uint8_t cache_oversample;
 } fm_voice_t;
 
 void fm_voice_init(fm_voice_t *v, float sample_rate);
