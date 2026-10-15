@@ -42,16 +42,21 @@ jobs:
         run: |
           python3 scripts/generate_params.py
           git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts
-      - name: Compile portable DSP, browser ABI and UI
+      - name: Compile portable DSP, sequencer, browser ABI and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
       - name: Run DSP stability tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c tests/test_dsp.c -lm -o build/test_dsp
           ./build/test_dsp
+      - name: Run sequencer timing tests
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_seq.c tests/test_seq.c -o build/test_seq
+          ./build/test_seq
       - name: Run UI interaction tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c firmware/src/fm_ui.c tests/test_ui.c -lm -o build/test_ui
