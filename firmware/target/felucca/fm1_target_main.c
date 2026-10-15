@@ -15,12 +15,7 @@
 #error "Normal synth target requires FMM_BUTTON_MAP_VERIFIED after real-device diagnostics"
 #endif
 
-static fm_app_t app;
-
-static void render_audio_irq(fm1_audio_block_t *block, void *user) {
-  fm_app_render_audio((fm_app_t *)user, block);
-}
-
+#if FMM_TARGET_DIAGNOSTIC
 static void run_diagnostic(void) {
   fm1_input_frame_t input;
   uint32_t last = 0u;
@@ -36,6 +31,12 @@ static void run_diagnostic(void) {
     }
   }
 }
+#else
+static fm_app_t app;
+
+static void render_audio_irq(fm1_audio_block_t *block, void *user) {
+  fm_app_render_audio((fm_app_t *)user, block);
+}
 
 static void run_synth(void) {
   fm_app_init(&app, fmm_felucca_sample_rate());
@@ -44,6 +45,7 @@ static void run_synth(void) {
 
   for (;;) fm_app_tick(&app, "INIT CLASSIC");
 }
+#endif
 
 int main(void) {
 #if FMM_TARGET_DIAGNOSTIC
