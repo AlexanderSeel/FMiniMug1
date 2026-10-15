@@ -62,6 +62,7 @@ export class MiniEngine {
   ranges:[number,number,number]=[2,2,2];
   filterContour:[number,number,number,number]=[this.patch.attack,this.patch.decay,this.patch.sustain,this.patch.release];
   retrigger=false;
+  notePriority=0;
   private node:AudioWorkletNode|null=null;
   private master:GainNode|null=null;
   private fallback:WebAudioFallback|null=null;
@@ -71,11 +72,21 @@ export class MiniEngine {
   private fallbackTimer:number|undefined;
   private fallbackGateTimer:number|undefined;
   private fallbackStep=0;
+  private heldFallback=new Set<number>();
+  private heldOrder=new Map<number,number>();
+  private heldSerial=0;
 
   onMode(cb:(m:EngineMode)=>void){this.modeListeners.add(cb);cb(this.mode);return()=>this.modeListeners.delete(cb)}
   onMeter(cb:(m:Meter)=>void){this.meterListeners.add(cb);return()=>this.meterListeners.delete(cb)}
   private setMode(m:EngineMode){this.mode=m;for(const cb of this.modeListeners)cb(m)}
   private sendParam(id:number,value:number){if(this.node)this.node.port.postMessage({type:'param',id,value})}
+  private selectFallbackNote(){
+    const notes=[...this.heldFallback];
+    if(!notes.length)return undefined;
+    if(this.notePriority===0)return Math.min(...notes);
+    if(this.notePriority===1)return Math.max(...notes);
+    return notes.reduce((best,n)=>(this.heldOrder.get(n)??0)>(this.heldOrder.get(best)??0)?n:best,notes[0]);
+  }
 
   async start(){
     if(this.starting)return this.starting;
@@ -120,15 +131,30 @@ export class MiniEngine {
     [PARAM.keytrack,2],[PARAM.oversample,1],
     [PARAM.osc1Range,this.ranges[0]],[PARAM.osc2Range,this.ranges[1]],[PARAM.osc3Range,this.ranges[2]],
     [PARAM.filterAttack,this.filterContour[0]],[PARAM.filterDecay,this.filterContour[1]],[PARAM.filterSustain,this.filterContour[2]],[PARAM.filterRelease,this.filterContour[3]],
-    [PARAM.retrigger,this.retrigger?1:0]
+    [PARAM.retrigger,this.retrigger?1:0],[PARAM.notePriority,this.notePriority]
   ]}
 
   applyPatch(p:Patch){this.patch=p;if(this.node)this.node.port.postMessage({type:'params',values:this.patchValues(p)})}
   setOscRange(index:0|1|2,range:number){const n=Math.max(0,Math.min(4,Math.round(range)));this.ranges=[...this.ranges] as [number,number,number];this.ranges[index]=n;this.sendParam([PARAM.osc1Range,PARAM.osc2Range,PARAM.osc3Range][index],n)}
   setFilterContour(values:[number,number,number,number]){this.filterContour=values;this.sendParam(PARAM.filterAttack,values[0]);this.sendParam(PARAM.filterDecay,values[1]);this.sendParam(PARAM.filterSustain,values[2]);this.sendParam(PARAM.filterRelease,values[3])}
   setRetrigger(on:boolean){this.retrigger=on;this.sendParam(PARAM.retrigger,on?1:0)}
-  async noteOn(note:number,p=this.patch){await this.start();this.applyPatch(p);if(this.node)this.node.port.postMessage({type:'noteOn',note,velocity:112});else this.fallback?.noteOn(note,p,this.ranges,this.filterContour)}
-  noteOff(p=this.patch){if(this.node)this.node.port.postMessage({type:'noteOff'});else this.fallback?.stop(p)}
+  setNotePriority(mode:number){this.notePriority=Math.max(0,Math.min(2,Math.round(mode)));this.sendParam(PARAM.notePriority,this.notePriority)}
+  async noteOn(note:number,p=this.patch){
+    await this.start();this.applyPatch(p);
+    this.heldFallback.add(note);this.heldOrder.set(note,++this.heldSerial);
+    if(this.node)this.node.port.postMessage({type:'noteOn',note,velocity:112});
+    else {const selected=this.selectFallbackNote();if(selected!==undefined)this.fallback?.noteOn(selected,p,this.ranges,this.filterContour)}
+  }
+  noteOff(note?:number,p=this.patch){
+    if(note===undefined){
+      this.heldFallback.clear();this.heldOrder.clear();
+      if(this.node)this.node.port.postMessage({type:'noteOff'});else this.fallback?.stop(p);
+      return;
+    }
+    this.heldFallback.delete(note);this.heldOrder.delete(note);
+    if(this.node)this.node.port.postMessage({type:'noteOff',note});
+    else {const selected=this.selectFallbackNote();if(selected===undefined)this.fallback?.stop(p);else this.fallback?.noteOn(selected,p,this.ranges,this.filterContour)}
+  }
 
   async startSequence(seq:Sequence){
     await this.start();
