@@ -11,6 +11,8 @@ typedef struct {
   int8_t octave_shift;
   uint8_t sequence_loaded;
   uint8_t last_playing;
+  uint8_t key_midi[27];
+  uint32_t key_down;
   uint32_t last_ui_ms;
 } fm_app_t;
 
