@@ -42,7 +42,6 @@ int main(void) {
   fm_ui_handle_input(&ui, &patch, &input);
   assert(patch.osc[0].level > voice.patch.osc[0].level);
 
-  /* HOLD on OSC switches encoder 1..3 to classic range selectors. */
   const uint8_t range_before = patch.osc[0].range;
   memset(&input, 0, sizeof(input));
   input.buttons = bit(FM1_KEY_HOLD);
@@ -50,7 +49,6 @@ int main(void) {
   fm_ui_handle_input(&ui, &patch, &input);
   assert(patch.osc[0].range == range_before + 1u);
 
-  /* HOLD + encoder 4 press toggles constant-time / constant-rate glide. */
   assert(patch.glide_mode == FM_GLIDE_TIME);
   memset(&input, 0, sizeof(input));
   input.buttons = bit(FM1_KEY_HOLD);
@@ -84,7 +82,6 @@ int main(void) {
   assert(patch.cutoff_hz > before);
   assert(patch.cutoff_hz - before < 10.0f);
 
-  /* CONTOUR normal edits loudness; HOLD edits filter contour independently. */
   memset(&input, 0, sizeof(input));
   input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
   fm_ui_handle_input(&ui, &patch, &input);
@@ -98,7 +95,6 @@ int main(void) {
   assert(patch.attack_s == amp_attack);
   assert(patch.filter_attack_s > filter_attack);
 
-  /* HOLD+E2 press links filter release to decay; HOLD+E3 does loudness. */
   assert(patch.filter_decay_switch == 0u);
   assert(patch.amp_decay_switch == 0u);
   memset(&input, 0, sizeof(input));
@@ -109,7 +105,6 @@ int main(void) {
   assert(patch.amp_decay_switch == 1u);
   assert(ui.focus_encoder == -1);
 
-  /* MOD HOLD exposes note-priority on encoder 1 and retrigger on encoder 4. */
   memset(&input, 0, sizeof(input));
   input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
   fm_ui_handle_input(&ui, &patch, &input);
@@ -122,6 +117,44 @@ int main(void) {
   fm_ui_handle_input(&ui, &patch, &input);
   assert(patch.note_priority == FM_NOTE_HIGH);
   assert(patch.retrigger == 1u);
+
+  /* Native 64-step sequence is shown through a 16-step hardware window. */
+  memset(&input, 0, sizeof(input));
+  input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(ui.page == FM_UI_SEQ);
+
+  fm_seq_pattern_t pattern;
+  memset(&pattern, 0, sizeof(pattern));
+  pattern.length = 40u;
+  pattern.bpm = 123u;
+  for (uint8_t i = 0; i < pattern.length; ++i) {
+    pattern.steps[i].note = (int8_t)(48 + i);
+    pattern.steps[i].flags = i == 18u ? FM_SEQ_FLAG_ACCENT : 0u;
+  }
+  fm_ui_set_sequence_view(&ui, &pattern, 0u);
+  assert(ui.seq_window == 0u);
+  assert(ui.seq_notes[0] == 48);
+  assert(ui.seq_notes[15] == 63);
+
+  /* Encoder 2 browses pages while transport is stopped. */
+  memset(&input, 0, sizeof(input));
+  input.encoder_delta[1] = 1;
+  fm_ui_handle_input(&ui, &patch, &input);
+  fm_ui_set_sequence_view(&ui, &pattern, 0u);
+  assert(ui.seq_window == 1u);
+  assert(ui.seq_notes[0] == 64);
+  assert(ui.seq_notes[2] == 66);
+  assert(ui.seq_flags[2] == FM_SEQ_FLAG_ACCENT);
+
+  /* Playback follows the page containing the current native step. */
+  ui.playing = 1u;
+  fm_ui_set_sequence_view(&ui, &pattern, 35u);
+  assert(ui.seq_window == 2u);
+  assert(ui.seq_step == 35u);
+  assert(ui.seq_notes[0] == 80);
+  assert(ui.seq_notes[7] == 87);
+  assert(ui.seq_notes[8] == -1);
 
   fm_ui_render(&ui, &patch, "TEST PATCH");
   assert(present_count == 1);
