@@ -108,6 +108,10 @@ static const char *priority_name(uint8_t priority) {
   return names[priority <= FM_NOTE_LAST ? priority : FM_NOTE_LOW];
 }
 
+static const char *glide_mode_name(uint8_t mode) {
+  return mode == FM_GLIDE_RATE ? "RATE" : "TIME";
+}
+
 static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
   if (delta == 0 || enc < 0 || enc > 3) return;
   const float fine = ui->hold ? 0.2f : 1.0f;
@@ -218,7 +222,8 @@ static void draw_contour_graph(const fm_patch_t *p, int filter) {
   const float attack = filter ? p->filter_attack_s : p->attack_s;
   const float decay = filter ? p->filter_decay_s : p->decay_s;
   const float sustain = clampf(filter ? p->filter_sustain : p->sustain, 0.0f, 1.0f);
-  const float release = filter ? p->filter_release_s : p->release_s;
+  const int decay_link = filter ? p->filter_decay_switch : p->amp_decay_switch;
+  const float release = decay_link ? decay : (filter ? p->filter_release_s : p->release_s);
   float total = attack + decay + release + 0.35f;
   if (total < 0.05f) total = 0.05f;
   float a = clampf(attack / total, 0.04f, 0.38f);
@@ -264,7 +269,20 @@ void fm_ui_handle_input(fm_ui_state_t *ui, fm_patch_t *patch, const fm1_input_fr
   if (pressed(input, FM1_KEY_PRESET)) ++ui->preset_index;
   if (pressed(input, FM1_KEY_PATTERN)) ++ui->pattern_index;
   for (int i = 0; i < 4; ++i) {
-    if (pressed(input, (fm1_button_t)(FM1_KEY_ENCODER_1 + i))) ui->focus_encoder = ui->focus_encoder == i ? -1 : (int8_t)i;
+    if (pressed(input, (fm1_button_t)(FM1_KEY_ENCODER_1 + i))) {
+      int consumed = 0;
+      if (ui->hold && ui->page == FM_UI_OSC && i == 3) {
+        patch->glide_mode = patch->glide_mode == FM_GLIDE_RATE ? FM_GLIDE_TIME : FM_GLIDE_RATE;
+        consumed = 1;
+      } else if (ui->hold && ui->page == FM_UI_CONTOUR && i == 1) {
+        patch->filter_decay_switch = (uint8_t)!patch->filter_decay_switch;
+        consumed = 1;
+      } else if (ui->hold && ui->page == FM_UI_CONTOUR && i == 2) {
+        patch->amp_decay_switch = (uint8_t)!patch->amp_decay_switch;
+        consumed = 1;
+      }
+      if (!consumed) ui->focus_encoder = ui->focus_encoder == i ? -1 : (int8_t)i;
+    }
     adjust_patch(ui, patch, i, input->encoder_delta[i]);
   }
 }
@@ -276,11 +294,11 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
   switch (ui->page) {
     case FM_UI_OSC:
       if (ui->hold) {
-        label[0] = "OSC1 RNG"; label[1] = "OSC2 RNG"; label[2] = "OSC3 RNG"; label[3] = "GLIDE FINE";
+        label[0] = "OSC1 RNG"; label[1] = "OSC2 RNG"; label[2] = "OSC3 RNG"; label[3] = "GLIDE MODE";
         fmt_text(value[0], sizeof(value[0]), range_name(p->osc[0].range));
         fmt_text(value[1], sizeof(value[1]), range_name(p->osc[1].range));
         fmt_text(value[2], sizeof(value[2]), range_name(p->osc[2].range));
-        fmt_fixed(value[3], sizeof(value[3]), p->glide_s, 3u, 0, "s");
+        fmt_text(value[3], sizeof(value[3]), glide_mode_name(p->glide_mode));
       } else {
         label[0] = "OSC 1"; label[1] = "OSC 2"; label[2] = "OSC 3"; label[3] = "GLIDE";
         fmt_int(value[0], sizeof(value[0]), (int)(p->osc[0].level * 100.0f), 0, "%");
@@ -352,8 +370,14 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
     for (int i = 0; i < 4; ++i) draw_value(8 + i * 56, 66, label[i], value[i], 0);
     fm1_platform_lcd_text(8, 136, "ENC1      ENC2      ENC3      ENC4", COL_DIM);
     if (ui->page == FM_UI_FILTER) draw_filter_graph(p);
-    else if (ui->page == FM_UI_CONTOUR) draw_contour_graph(p, ui->hold);
-    else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / SECONDARY" : "PRESS ENCODER = FOCUS", COL_TEXT);
+    else if (ui->page == FM_UI_CONTOUR) {
+      draw_contour_graph(p, ui->hold);
+      fm1_platform_lcd_text(8, 204, p->filter_decay_switch ? "F DECAY ON" : "F DECAY OFF", p->filter_decay_switch ? COL_ACCENT : COL_DIM);
+      fm1_platform_lcd_text(122, 204, p->amp_decay_switch ? "A DECAY ON" : "A DECAY OFF", p->amp_decay_switch ? COL_ACCENT : COL_DIM);
+      fm1_platform_lcd_text(8, 220, "HOLD+E2 F / HOLD+E3 A", COL_DIM);
+    } else if (ui->page == FM_UI_OSC && ui->hold) {
+      fm1_platform_lcd_text(8, 180, "ENC4 TURN=AMOUNT PRESS=MODE", COL_TEXT);
+    } else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / SECONDARY" : "PRESS ENCODER = FOCUS", COL_TEXT);
   }
 
   if (ui->playing) fm1_platform_lcd_rect(215, 8, 16, 8, COL_RED);
