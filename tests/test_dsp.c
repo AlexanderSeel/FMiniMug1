@@ -15,6 +15,43 @@ static float render_peak(fm_voice_t *voice, int samples) {
   return peak;
 }
 
+static void test_note_priority(fm_voice_t *voice) {
+  fm_voice_note_off(voice);
+  voice->patch.retrigger = 0;
+
+  /* Classic default: low note wins until released. */
+  voice->patch.note_priority = FM_NOTE_LOW;
+  fm_voice_note_on(voice, 60, 100);
+  fm_voice_note_on(voice, 67, 100);
+  assert(voice->current_note == 60);
+  fm_voice_note_off_note(voice, 60);
+  assert(voice->gate > 0.0f && voice->current_note == 67);
+  fm_voice_note_off_note(voice, 67);
+  assert(voice->gate == 0.0f);
+
+  /* High note wins and falls back to the lower held key. */
+  voice->patch.note_priority = FM_NOTE_HIGH;
+  fm_voice_note_on(voice, 60, 100);
+  fm_voice_note_on(voice, 67, 100);
+  assert(voice->current_note == 67);
+  fm_voice_note_off_note(voice, 67);
+  assert(voice->gate > 0.0f && voice->current_note == 60);
+  fm_voice_note_off(voice);
+
+  /* Last-note priority returns to the most recently pressed remaining key. */
+  voice->patch.note_priority = FM_NOTE_LAST;
+  fm_voice_note_on(voice, 60, 100);
+  fm_voice_note_on(voice, 67, 100);
+  fm_voice_note_on(voice, 64, 100);
+  assert(voice->current_note == 64);
+  fm_voice_note_off_note(voice, 64);
+  assert(voice->current_note == 67);
+  fm_voice_note_off_note(voice, 67);
+  assert(voice->current_note == 60);
+  fm_voice_note_off_note(voice, 60);
+  assert(voice->gate == 0.0f);
+}
+
 int main(void) {
   fm_voice_t voice;
   fm_voice_init(&voice, 48000.0f);
@@ -22,6 +59,7 @@ int main(void) {
   assert(voice.patch.osc[0].range == FM_RANGE_8);
   assert(voice.patch.filter_attack_s == voice.patch.attack_s);
   assert(voice.patch.retrigger == 0);
+  assert(voice.patch.note_priority == FM_NOTE_LOW);
 
   voice.patch.osc[0].wave = FM_WAVE_SAW;
   voice.patch.osc[1].wave = FM_WAVE_SQUARE;
@@ -48,30 +86,40 @@ int main(void) {
   fm_voice_note_on(&voice, 60, 112);
   assert(fabsf(voice.target_freq[0] - freq_8 * 2.0f) < 0.05f);
   voice.patch.osc[0].range = FM_RANGE_8;
+  fm_voice_note_off(&voice);
 
   /* Filter and loudness contours evolve independently. */
   voice.patch.attack_s = 0.001f;
   voice.patch.filter_attack_s = 0.5f;
   voice.env_amp = 0.0f;
   voice.env_filter = 0.0f;
-  voice.gate = 0.0f;
   fm_voice_note_on(&voice, 36, 112);
   render_peak(&voice, 2400);
   assert(voice.env_amp > voice.env_filter);
 
   const float attack_peak = render_peak(&voice, 45600);
   assert(attack_peak > 0.01f);
+  fm_voice_note_off(&voice);
 
-  /* Legato leaves contours running, retrigger mode explicitly restarts them. */
-  const float before_legato = voice.env_amp;
+  /* Legato leaves contours running, retrigger mode restarts on a selected-note transition. */
+  voice.patch.note_priority = FM_NOTE_LAST;
   voice.patch.retrigger = 0;
   fm_voice_note_on(&voice, 48, 112);
+  render_peak(&voice, 1200);
+  const float before_legato = voice.env_amp;
+  fm_voice_note_on(&voice, 52, 112);
+  assert(voice.current_note == 52);
   assert(voice.env_amp == before_legato);
   voice.patch.retrigger = 1;
-  fm_voice_note_on(&voice, 52, 112);
+  fm_voice_note_on(&voice, 55, 112);
+  assert(voice.current_note == 55);
   assert(voice.env_amp == 0.0f);
   assert(voice.env_filter == 0.0f);
+  fm_voice_note_off(&voice);
 
+  test_note_priority(&voice);
+
+  voice.patch.note_priority = FM_NOTE_LOW;
   voice.patch.retrigger = 0;
   fm_voice_note_on(&voice, 72, 127);
   const float high_peak = render_peak(&voice, 12000);
