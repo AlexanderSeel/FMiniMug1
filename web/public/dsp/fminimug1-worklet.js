@@ -31,8 +31,10 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       else if (m.type === 'params') {
         for (const [id, value] of m.values) this.exports.fmm_set_param(id, value);
       } else if (m.type === 'noteOn') this.exports.fmm_note_on(m.note, m.velocity ?? 110);
-      else if (m.type === 'noteOff') this.exports.fmm_note_off();
-      else if (m.type === 'sequence') {
+      else if (m.type === 'noteOff') {
+        if (Number.isInteger(m.note) && this.exports.fmm_note_off_note) this.exports.fmm_note_off_note(m.note);
+        else this.exports.fmm_note_off();
+      } else if (m.type === 'sequence') {
         this.exports.fmm_seq_clear();
         const length = Math.min(64, m.notes?.length ?? 0);
         this.exports.fmm_seq_set_meta(length || 1, m.bpm ?? 120, m.swing ?? 0);
