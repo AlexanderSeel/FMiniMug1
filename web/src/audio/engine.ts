@@ -110,7 +110,10 @@ export class MiniEngine {
     [PARAM.cutoff,p.cutoff],[PARAM.res,p.res],[PARAM.env,p.env],[PARAM.attack,p.attack],[PARAM.decay,p.decay],
     [PARAM.sustain,p.sustain],[PARAM.release,p.release],[PARAM.glide,p.glide],[PARAM.mixerDrive,p.drive],
     [PARAM.filterDrive,Math.max(.8,p.drive*.85)],[PARAM.drift,p.drift],[PARAM.feedback,Math.min(.48,p.res*.28)],
-    [PARAM.keytrack,2],[PARAM.oversample,1]
+    [PARAM.keytrack,2],[PARAM.oversample,1],
+    [PARAM.osc1Range,2],[PARAM.osc2Range,2],[PARAM.osc3Range,2],
+    [PARAM.filterAttack,p.attack],[PARAM.filterDecay,p.decay],[PARAM.filterSustain,p.sustain],[PARAM.filterRelease,p.release],
+    [PARAM.retrigger,0]
   ]}
 
   applyPatch(p:Patch){this.patch=p;if(this.node)this.node.port.postMessage({type:'params',values:this.patchValues(p)})}
