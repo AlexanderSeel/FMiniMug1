@@ -49,10 +49,12 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Add compact live cutoff/resonance response graph to FILTER.
 - [x] Add compact loudness/filter ADSR contour graph to CONTOUR.
 - [x] Generate browser/C parameter IDs from one shared manifest so mappings cannot drift.
-- [ ] Port Felucca-compatible display/HAL implementation behind `fm1_platform.h`.
+- [x] Implement Felucca-compatible display/input/time/audio/LED adapter behind `fm1_platform.h`.
+- [x] Add raw 27-key / 14-button / 7-encoder hardware diagnostic screen.
+- [x] Add compile-time semantic control-map gate so normal synth mode cannot use assumed raw IDs.
 - [ ] Add 16-step viewport and scrolling 64-step patterns to SEQ/PERF.
 - [ ] Complete HOLD shortcuts for oscillator waveform assignment and remaining performance actions.
-- [ ] Verify physical encoder/button IDs on real FM-1 diagnostic screen.
+- [ ] Verify physical encoder/button IDs on a real FM-1 diagnostic screen.
 
 ## Milestone 3 — Native DSP engine 🚧
 - [x] PolyBLEP band-limited saw/pulse/square oscillators.
@@ -67,15 +69,17 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Initial resonance bass compensation and bounded high-resonance stress test.
 - [ ] Calibrate self-oscillation pitch/amplitude near maximum emphasis.
 - [x] Filter keyboard tracking off / 1⁄3 / 2⁄3 / full variants.
-- [x] Separate filter and loudness ADSR parameter sets and envelope states.
+- [x] Separate filter and loudness ADSR parameter sets and explicit envelope stages.
 - [ ] Add classic decay/release switch behavior on top of the separate contours.
 - [x] Single-trigger legato vs selected-note retrigger mode.
 - [x] Low/high/last held-note priority modes with fallback when the active key is released.
 - [ ] Glide constant-time/constant-rate options.
 - [x] Deterministic analog drift foundation.
 - [ ] Extend analog model with component spread, calibration error and filter asymmetry.
+- [x] Remove direct `libm` dependency from the real-time DSP path.
+- [x] Link the float DSP against the actual pi32v2 `libcompiler-rt.a` soft-float runtime.
 - [x] Host finite/bounded-output stress tests.
-- [x] Host octave-range, dual-contour, retrigger and held-note-priority tests.
+- [x] Host octave-range, dual-contour, retrigger, ADSR-stage and held-note-priority tests.
 - [ ] CPU budget and golden render tests.
 
 ## Milestone 4 — Presets and sequences 🚧
@@ -105,7 +109,9 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 
 ## Milestone 6 — Installer / packaging
 - [x] Document Felucca HAL/boot/package port order and safety gates in `docs/FELUCCA_PORT.md`.
-- [ ] Reuse or adapt the proven Felucca `.fwsc` packaging path with GPL compliance if Felucca source is incorporated.
+- [x] Produce a reproducible **non-installable** diagnostic app image with the real JieLi toolchain.
+- [x] Refuse `.fwsc` generation in target CI until real-device/recovery gates are complete.
+- [ ] Reuse or adapt the proven Felucca `.fwsc` packaging path with GPL compliance after hardware bring-up.
 - [ ] Device identity and package-size validation before erase/write.
 - [ ] Web MIDI installer in Chrome/Edge.
 - [ ] CLI installer.
@@ -136,12 +142,24 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Compile-check browser native-DSP/sequencer ABI in CI.
 - [x] CI verifies generated browser/native parameter protocol files are synchronized.
 - [x] Production web + WASM build in CI.
+- [x] Real JieLi pi32v2 diagnostic compile/link in CI against pinned Felucca 1.6.1 HAL.
+- [x] Real JieLi pi32v2 full-synth compile/link in CI using a synthetic, explicitly non-hardware control map.
+- [x] Validate target `_start`, XIP bounds, BSS bounds, no chip-ROM references, hashes and no `.fwsc` output.
 - [ ] Golden audio render regression suite.
 - [ ] UI clipping/overlap snapshot tests at 240×240.
 - [ ] Web unit tests.
-- [ ] Native FM-1 build in CI or reproducible documented container environment.
-- [ ] Real-device smoke test checklist.
+- [ ] Real-device display/input diagnostic smoke test.
+- [ ] Real-device audio timing/underrun smoke test.
+- [ ] Real-device verified semantic control map.
 - [ ] Beta release only after installer/recovery path has been verified on hardware.
+
+## Current real-target build facts
+
+Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca 1.6.1).
+
+- Diagnostic image: 4,984 bytes, `_start=0x02000120`, BSS `0x01C08000..0x01C08C38`, raw control map, flash writes disabled.
+- Full synth link check: 16,656 bytes, `_start=0x02000120`, BSS `0x01C08000..0x01C09004`, pi32v2 `libcompiler-rt.a`, synthetic control map, flash writes disabled.
+- Both target images are CI verification artifacts only. They are **not declared safe to flash** and are not packaged as `.fwsc`.
 
 ## FM-1 control concept
 
@@ -169,6 +187,6 @@ Press an encoder to zoom one parameter to nearly full screen, show its graph/val
 Factory patches are original parameter sets inspired by recognizable categories of classic analog sounds. Do not copy proprietary preset books, commercial banks, artwork, logos, or patch sheets verbatim.
 
 ## Felucca integration notes
-Felucca is the proven low-level FM-1 reference for `.fwsc` packaging, Web MIDI installation, flash persistence, USB audio/MIDI, ALNK0/I2S audio, the ST7789-class 240×240 display, and the FM-1's 11×6 input matrix with 27 note keys, 14 buttons and seven encoders. FMiniMug1 keeps these details behind `fm1_platform.h`; see `docs/FELUCCA_PORT.md` for the port map and safe bring-up order.
+Felucca is the proven low-level FM-1 reference for `.fwsc` packaging, Web MIDI installation, flash persistence, USB audio/MIDI, ALNK0/I2S audio, the ST7789-class 240×240 display, and the FM-1's 11×6 input matrix with 27 note keys, 14 buttons and seven encoders. FMiniMug1 keeps these details behind `fm1_platform.h`; see `docs/FELUCCA_PORT.md` and `docs/FELUCCA_TARGET_CONTRACT.md` for the port map and safe bring-up order.
 
-The first real-device target remains deliberately read-only with respect to flash: display, input diagnostics and audio bring-up come before any package/erase/write path.
+The first real-device target remains deliberately read-only with respect to flash: display, input diagnostics and audio timing verification come before any package/erase/write path.
