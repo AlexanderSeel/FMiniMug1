@@ -51,6 +51,12 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_app.c -o build/fm_app.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_diag.c -o build/fm_diag.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
+      - name: Compile-check Felucca target adapter with host HAL stubs
+        run: |
+          INC='-Itests/felucca_stub -Ifirmware/include -Ifirmware/target/felucca'
+          cc -std=c11 -Wall -Wextra -Werror $INC -c firmware/target/felucca/fm1_platform_felucca.c -o build/fm1_platform_felucca.o
+          cc -std=c11 -Wall -Wextra -Werror $INC -c firmware/target/felucca/fm1_lcd_bridge.c -o build/fm1_lcd_bridge.o
+          cc -std=c11 -Wall -Wextra -Werror $INC -c firmware/target/felucca/fm1_target_main.c -o build/fm1_target_main.o
       - name: Run DSP stability and mono-priority tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c tests/test_dsp.c -lm -o build/test_dsp
