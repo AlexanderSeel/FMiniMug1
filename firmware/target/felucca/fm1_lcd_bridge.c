@@ -92,7 +92,7 @@ static uint16_t glyph(char ch) {
     case '-':return GLYPH(0,0,7,0,0); case '+':return GLYPH(0,2,7,2,0);
     case '/':return GLYPH(1,1,2,4,4); case '.':return GLYPH(0,0,0,0,2);
     case ':':return GLYPH(0,2,0,2,0); case '%':return GLYPH(5,1,2,4,5);
-    case '\'':return GLYPH(2,2,0,0,0); case '_':return GLYPH(0,0,0,0,7);
+    case 39:return GLYPH(2,2,0,0,0); case '_':return GLYPH(0,0,0,0,7);
     case ' ':return 0u; default:return GLYPH(7,1,2,0,2);
   }
 }
