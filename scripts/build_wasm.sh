@@ -37,7 +37,6 @@ emcc \
   -Wl,--export=fmm_seq_stop \
   -Wl,--export=fmm_seq_step \
   -Wl,--export=fmm_render \
-  -Wl,--export-memory \
   -o "$OUT/fminimug1.wasm"
 
 echo "built $OUT/fminimug1.wasm"
