@@ -57,7 +57,8 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Add raw 27-key / 14-button / 7-encoder hardware diagnostic screen.
 - [x] Add compile-time semantic control-map gate so normal synth mode cannot use assumed raw IDs.
 - [x] Add host behavior tests for raw/mapped Felucca input, LEDs, ALNK rendering, timing budget and disabled flash writes.
-- [ ] Add 16-step viewport and scrolling 64-step patterns to SEQ/PERF.
+- [x] Add 16-step viewport over native 1–64-step patterns with stopped-page browsing and playhead-follow scrolling.
+- [x] Show rest/note cells plus accent/tie/slide markers in the 240×240 SEQ/PERF viewport.
 - [ ] Complete HOLD shortcuts for oscillator waveform assignment and remaining performance actions.
 - [ ] Verify physical encoder/button IDs on a real FM-1 diagnostic screen.
 
@@ -145,7 +146,7 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 ## Milestone 8 — QA / release 🚧
 - [x] Host DSP stability tests.
 - [x] Host sequencer timing/swing/tie tests.
-- [x] Host UI interaction/mapping tests.
+- [x] Host UI interaction/mapping tests including 64-step viewport paging/follow behavior.
 - [x] Host Felucca platform-adapter behavior tests.
 - [x] Compile-check browser native-DSP/sequencer ABI in CI.
 - [x] CI verifies generated browser/native parameter protocol files are synchronized.
