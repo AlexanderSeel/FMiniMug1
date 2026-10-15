@@ -10,6 +10,13 @@
 
 typedef void (*fm1_felucca_audio_renderer_t)(fm1_audio_block_t *block, void *user);
 
+typedef struct {
+  uint32_t irq_count;
+  uint32_t last_ticks;
+  uint32_t max_ticks;
+  uint32_t over_budget_count;
+} fm1_felucca_audio_stats_t;
+
 /* IRQ ownership stays in the one translation unit that includes Felucca's
  * fm1_irq.h, avoiding duplicate fault-dispatch definitions. */
 void fm1_felucca_irq_init(void);
@@ -21,6 +28,11 @@ void fm1_felucca_set_audio_renderer(fm1_felucca_audio_renderer_t renderer, void 
 /* Enable ALNK0 once the application/runtime object is initialized. */
 void fm1_felucca_audio_start(void);
 void fm1_felucca_audio_stop(void);
+
+/* 128 frames × 544 TIMER4 ticks/frame = exact half-buffer render budget. */
+#define FMM_AUDIO_HALF_BUDGET_TICKS 69632u
+void fm1_felucca_audio_stats_reset(void);
+void fm1_felucca_audio_stats_get(fm1_felucca_audio_stats_t *stats);
 
 /* Exact rate implied by Felucca's 24 MHz / 544 ALNK clocking. */
 float fmm_felucca_sample_rate(void);
