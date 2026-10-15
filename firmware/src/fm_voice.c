@@ -2,17 +2,195 @@
 #include <math.h>
 #include <string.h>
 
-static float clampf(float x,float lo,float hi){return x<lo?lo:(x>hi?hi:x);} 
-static float midi_hz(uint8_t n){return 440.0f*powf(2.0f,((float)n-69.0f)/12.0f);} 
-static float fast_tanh(float x){const float x2=x*x;return x*(27.0f+x2)/(27.0f+9.0f*x2);} 
-static float rnd(fm_voice_t *v){v->rng=1664525u*v->rng+1013904223u;return ((v->rng>>8)&0xFFFFFF)/8388607.5f-1.0f;} 
-static float osc_sample(fm_wave_t w,float p){switch(w){case FM_WAVE_TRI:return 1.0f-4.0f*fabsf(p-.5f);case FM_WAVE_SQUARE:return p<.5f?1.0f:-1.0f;case FM_WAVE_PULSE:return p<.25f?1.0f:-1.0f;case FM_WAVE_SAW:default:return 2.0f*p-1.0f;}}
+#define FM_PI 3.14159265358979323846f
 
-void fm_voice_init(fm_voice_t *v,float sample_rate){memset(v,0,sizeof(*v));v->sample_rate=sample_rate;v->rng=0x51F17A1u;v->patch.cutoff_hz=1000.0f;v->patch.resonance=.2f;v->patch.attack_s=.005f;v->patch.decay_s=.3f;v->patch.sustain=.6f;v->patch.release_s=.25f;v->patch.mixer_drive=1.4f;v->patch.filter_drive=1.1f;for(int i=0;i<3;i++){v->patch.osc[i].wave=FM_WAVE_SAW;v->patch.osc[i].level=i==0?.8f:.35f;v->patch.osc[i].keyboard_track=1;}}
-void fm_voice_set_patch(fm_voice_t *v,const fm_patch_t *p){v->patch=*p;}
-void fm_voice_note_on(fm_voice_t *v,uint8_t note,uint8_t velocity){float base=midi_hz(note);for(int i=0;i<3;i++){const fm_osc_params_t *o=&v->patch.osc[i];float st=o->coarse_semitones+o->fine_cents/100.0f;v->target_freq[i]=(o->keyboard_track?base:440.0f)*powf(2.0f,st/12.0f);if(o->low_mode)v->target_freq[i]*=.01f;if(v->freq[i]<=0.0f)v->freq[i]=v->target_freq[i];}v->gate=clampf((float)velocity/127.0f,.05f,1.0f);}
-void fm_voice_note_off(fm_voice_t *v){v->gate=0.0f;}
+static float clampf(float x, float lo, float hi) {
+  return x < lo ? lo : (x > hi ? hi : x);
+}
 
-float fm_voice_process(fm_voice_t *v){const float sr=v->sample_rate>1000?v->sample_rate:48000.0f;const float atk=1.0f/fmaxf(1.0f,v->patch.attack_s*sr),dec=1.0f/fmaxf(1.0f,v->patch.decay_s*sr),rel=1.0f/fmaxf(1.0f,v->patch.release_s*sr);if(v->gate>0){v->env_amp += (1.0f-v->env_amp)*atk; if(v->env_amp>v->patch.sustain)v->env_amp += (v->patch.sustain-v->env_amp)*dec;}else v->env_amp += (0-v->env_amp)*rel;v->env_filter=v->env_amp;
- float mix=0.0f;for(int i=0;i<3;i++){float glide=v->patch.glide_s<=0?1.0f:1.0f/fmaxf(1.0f,v->patch.glide_s*sr);v->drift_state[i]=v->drift_state[i]*.99995f+rnd(v)*.00005f;float drift_cents=v->drift_state[i]*v->patch.drift*7.0f;float tf=v->target_freq[i]*powf(2.0f,drift_cents/1200.0f);v->freq[i]+=(tf-v->freq[i])*glide;v->phase[i]+=v->freq[i]/sr;if(v->phase[i]>=1.0f)v->phase[i]-=1.0f;mix+=osc_sample(v->patch.osc[i].wave,v->phase[i])*v->patch.osc[i].level;}mix+=v->ladder[3]*v->patch.feedback*.35f;mix=fast_tanh(mix*v->patch.mixer_drive);
- float cutoff=clampf(v->patch.cutoff_hz+v->patch.filter_env_amount*v->env_filter,20.0f,sr*.42f);float g=1.0f-expf(-6.2831853f*cutoff/sr);float feedback=clampf(v->patch.resonance,0,1)*4.0f;float x=fast_tanh((mix-feedback*v->ladder[3])*v->patch.filter_drive);for(int i=0;i<4;i++){float in=i==0?x:v->ladder[i-1];v->ladder[i]+=g*(fast_tanh(in)-fast_tanh(v->ladder[i]));}return clampf(v->ladder[3]*v->env_amp,-1,1);}
+static float midi_hz(uint8_t n) {
+  return 440.0f * powf(2.0f, ((float)n - 69.0f) / 12.0f);
+}
+
+static float fast_tanh(float x) {
+  const float x2 = x * x;
+  return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+}
+
+static float rnd(fm_voice_t *v) {
+  v->rng = 1664525u * v->rng + 1013904223u;
+  return ((v->rng >> 8) & 0xFFFFFF) / 8388607.5f - 1.0f;
+}
+
+static float env_coeff(float time_s, float sample_rate) {
+  if (time_s <= 0.00001f) return 1.0f;
+  return 1.0f - expf(-1.0f / (time_s * sample_rate));
+}
+
+/* Standard PolyBLEP correction for a discontinuity at phase 0. */
+static float poly_blep(float t, float dt) {
+  if (dt <= 0.0f) return 0.0f;
+  if (t < dt) {
+    t /= dt;
+    return t + t - t * t - 1.0f;
+  }
+  if (t > 1.0f - dt) {
+    t = (t - 1.0f) / dt;
+    return t * t + t + t + 1.0f;
+  }
+  return 0.0f;
+}
+
+static float blep_saw(float phase, float dt) {
+  return (2.0f * phase - 1.0f) - poly_blep(phase, dt);
+}
+
+static float blep_pulse(float phase, float dt, float duty) {
+  float y = phase < duty ? 1.0f : -1.0f;
+  y += poly_blep(phase, dt);
+  float t2 = phase - duty;
+  if (t2 < 0.0f) t2 += 1.0f;
+  y -= poly_blep(t2, dt);
+  return y;
+}
+
+static float osc_sample(fm_voice_t *v, int index, fm_wave_t wave, float phase, float dt) {
+  switch (wave) {
+    case FM_WAVE_TRI: {
+      /* Integrate an anti-aliased square. The small leak prevents DC drift. */
+      const float square = blep_pulse(phase, dt, 0.5f);
+      v->tri_state[index] += square * (4.0f * dt);
+      v->tri_state[index] *= 1.0f - clampf(dt * 0.5f, 0.0f, 0.01f);
+      return clampf(v->tri_state[index], -1.1f, 1.1f);
+    }
+    case FM_WAVE_SQUARE:
+      return blep_pulse(phase, dt, 0.5f);
+    case FM_WAVE_PULSE:
+      return blep_pulse(phase, dt, 0.25f);
+    case FM_WAVE_SAW:
+    default:
+      return blep_saw(phase, dt);
+  }
+}
+
+static void update_envelopes(fm_voice_t *v, float sr) {
+  if (v->gate > 0.0f) {
+    const float a = env_coeff(v->patch.attack_s, sr);
+    const float d = env_coeff(v->patch.decay_s, sr);
+    if (v->env_amp < 0.995f) {
+      v->env_amp += (1.0f - v->env_amp) * a;
+      v->env_filter += (1.0f - v->env_filter) * a;
+    } else {
+      v->env_amp += (v->patch.sustain - v->env_amp) * d;
+      v->env_filter += (v->patch.sustain - v->env_filter) * d;
+    }
+  } else {
+    const float r = env_coeff(v->patch.release_s, sr);
+    v->env_amp += (0.0f - v->env_amp) * r;
+    v->env_filter += (0.0f - v->env_filter) * r;
+  }
+}
+
+static float ladder_tick(fm_voice_t *v, float input, float cutoff_hz, float sub_sr) {
+  const float resonance = clampf(v->patch.resonance, 0.0f, 1.0f);
+  const float normalized = clampf(cutoff_hz, 10.0f, sub_sr * 0.43f);
+  const float g = tanf(FM_PI * normalized / sub_sr);
+  const float a = g / (1.0f + g);
+  const float feedback = resonance * 4.15f;
+  float x = fast_tanh((input - feedback * v->ladder[3]) * v->patch.filter_drive);
+
+  for (int i = 0; i < 4; ++i) {
+    const float previous = i == 0 ? x : v->ladder[i - 1];
+    const float target = fast_tanh(previous);
+    const float state = fast_tanh(v->ladder[i]);
+    v->ladder[i] += a * (target - state);
+  }
+
+  /* Compensate some of the classic ladder bass loss as resonance rises. */
+  return v->ladder[3] * (1.0f + 0.18f * resonance);
+}
+
+void fm_voice_init(fm_voice_t *v, float sample_rate) {
+  memset(v, 0, sizeof(*v));
+  v->sample_rate = sample_rate;
+  v->rng = 0x51F17A1u;
+  v->current_note = 60;
+  v->patch.cutoff_hz = 1000.0f;
+  v->patch.resonance = 0.2f;
+  v->patch.attack_s = 0.005f;
+  v->patch.decay_s = 0.3f;
+  v->patch.sustain = 0.6f;
+  v->patch.release_s = 0.25f;
+  v->patch.mixer_drive = 1.4f;
+  v->patch.filter_drive = 1.1f;
+  v->patch.filter_keytrack = 0;
+  v->patch.oversample_2x = 1;
+  for (int i = 0; i < 3; ++i) {
+    v->patch.osc[i].wave = FM_WAVE_SAW;
+    v->patch.osc[i].level = i == 0 ? 0.8f : 0.35f;
+    v->patch.osc[i].keyboard_track = 1;
+  }
+}
+
+void fm_voice_set_patch(fm_voice_t *v, const fm_patch_t *p) {
+  v->patch = *p;
+}
+
+void fm_voice_note_on(fm_voice_t *v, uint8_t note, uint8_t velocity) {
+  const float base = midi_hz(note);
+  v->current_note = note;
+  for (int i = 0; i < 3; ++i) {
+    const fm_osc_params_t *o = &v->patch.osc[i];
+    const float st = o->coarse_semitones + o->fine_cents / 100.0f;
+    v->target_freq[i] = (o->keyboard_track ? base : 440.0f) * powf(2.0f, st / 12.0f);
+    if (o->low_mode) v->target_freq[i] *= 0.01f;
+    if (v->freq[i] <= 0.0f) v->freq[i] = v->target_freq[i];
+  }
+  v->velocity = clampf((float)velocity / 127.0f, 0.05f, 1.0f);
+  v->gate = 1.0f;
+}
+
+void fm_voice_note_off(fm_voice_t *v) {
+  v->gate = 0.0f;
+}
+
+float fm_voice_process(fm_voice_t *v) {
+  const float sr = v->sample_rate > 1000.0f ? v->sample_rate : 48000.0f;
+  const int os = v->patch.oversample_2x ? 2 : 1;
+  const float sub_sr = sr * (float)os;
+  update_envelopes(v, sr);
+
+  float output = 0.0f;
+  for (int sub = 0; sub < os; ++sub) {
+    float mix = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+      const float glide = v->patch.glide_s <= 0.0f
+        ? 1.0f
+        : env_coeff(v->patch.glide_s, sub_sr);
+      v->drift_state[i] = v->drift_state[i] * 0.99995f + rnd(v) * 0.00005f;
+      const float drift_cents = v->drift_state[i] * v->patch.drift * 7.0f;
+      const float tf = v->target_freq[i] * powf(2.0f, drift_cents / 1200.0f);
+      v->freq[i] += (tf - v->freq[i]) * glide;
+
+      const float dt = clampf(v->freq[i] / sub_sr, 0.0000001f, 0.45f);
+      v->phase[i] += dt;
+      if (v->phase[i] >= 1.0f) v->phase[i] -= 1.0f;
+      mix += osc_sample(v, i, v->patch.osc[i].wave, v->phase[i], dt) * v->patch.osc[i].level;
+    }
+
+    mix += v->ladder[3] * v->patch.feedback * 0.35f;
+    mix = fast_tanh(mix * v->patch.mixer_drive);
+
+    float cutoff = v->patch.cutoff_hz + v->patch.filter_env_amount * v->env_filter;
+    if (v->patch.filter_keytrack > 0) {
+      const float track = clampf((float)v->patch.filter_keytrack / 3.0f, 0.0f, 1.0f);
+      cutoff *= powf(2.0f, (((float)v->current_note - 60.0f) / 12.0f) * track);
+    }
+    cutoff = clampf(cutoff, 20.0f, sr * 0.42f);
+    output += ladder_tick(v, mix, cutoff, sub_sr);
+  }
+
+  output /= (float)os;
+  output *= v->env_amp * v->velocity;
+  return clampf(output, -1.0f, 1.0f);
+}
