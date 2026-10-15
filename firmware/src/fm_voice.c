@@ -127,17 +127,17 @@ static void refresh_cached_coeffs(fm_voice_t *v, float sr, int os) {
 }
 
 static int note_is_held(const fm_voice_t *v, uint8_t note) {
-  return (v->held_notes[note >> 6] & (1ull << (note & 63u))) != 0ull;
+  return (v->held_notes[note >> 5] & (1u << (note & 31u))) != 0u;
 }
 
 static void note_set_held(fm_voice_t *v, uint8_t note, int held) {
-  const uint64_t mask = 1ull << (note & 63u);
-  if (held) v->held_notes[note >> 6] |= mask;
-  else v->held_notes[note >> 6] &= ~mask;
+  const uint32_t mask = 1u << (note & 31u);
+  if (held) v->held_notes[note >> 5] |= mask;
+  else v->held_notes[note >> 5] &= ~mask;
 }
 
 static int select_held_note(const fm_voice_t *v) {
-  if ((v->held_notes[0] | v->held_notes[1]) == 0ull) return -1;
+  if ((v->held_notes[0] | v->held_notes[1] | v->held_notes[2] | v->held_notes[3]) == 0u) return -1;
 
   const uint8_t mode = v->patch.note_priority <= FM_NOTE_LAST ? v->patch.note_priority : FM_NOTE_LOW;
   if (mode == FM_NOTE_LOW) {
@@ -344,8 +344,10 @@ void fm_voice_note_off_note(fm_voice_t *v, uint8_t note) {
 }
 
 void fm_voice_note_off(fm_voice_t *v) {
-  v->held_notes[0] = 0ull;
-  v->held_notes[1] = 0ull;
+  v->held_notes[0] = 0u;
+  v->held_notes[1] = 0u;
+  v->held_notes[2] = 0u;
+  v->held_notes[3] = 0u;
   memset(v->held_order, 0, sizeof(v->held_order));
   v->gate = 0.0f;
   begin_release(v);
