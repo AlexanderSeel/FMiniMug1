@@ -86,6 +86,65 @@ static void draw_value(int x, int y, const char *label, const char *value, int f
   fm1_platform_lcd_text(x + 4, y + 30, value, focused ? COL_ACCENT : COL_TEXT);
 }
 
+static void draw_filter_graph(const fm_patch_t *p) {
+  const int x0 = 9, y0 = 151, w = 222, h = 30;
+  float cut = clampf(p->cutoff_hz / 12000.0f, 0.03f, 0.96f);
+  float res = clampf(p->resonance, 0.0f, 1.0f);
+  fm1_platform_lcd_rect(x0, y0, w, 1, COL_PANEL);
+  fm1_platform_lcd_rect(x0, y0 + h, w, 1, COL_PANEL);
+  for (int i = 0; i < 74; ++i) {
+    float x = (float)i / 73.0f;
+    float amp;
+    if (x <= cut) amp = 0.72f;
+    else {
+      float t = (x - cut) / (1.0f - cut);
+      amp = 0.72f * (1.0f - t);
+      amp *= (1.0f - 0.65f * t);
+    }
+    float d = x - cut;
+    if (d < 0.0f) d = -d;
+    if (d < 0.075f) amp += res * (1.0f - d / 0.075f) * 0.42f;
+    amp = clampf(amp, 0.02f, 1.0f);
+    int px = x0 + i * 3;
+    int py = y0 + h - 2 - (int)(amp * (float)(h - 4));
+    fm1_platform_lcd_rect(px, py, 2, 2, res > 0.72f ? COL_RED : COL_ACCENT);
+  }
+  fm1_platform_lcd_text(10, 184, "FILTER RESPONSE", COL_DIM);
+}
+
+static void draw_contour_graph(const fm_patch_t *p) {
+  const int x0 = 9, y0 = 151, w = 222, h = 30;
+  float total = p->attack_s + p->decay_s + p->release_s + 0.35f;
+  if (total < 0.05f) total = 0.05f;
+  float a = clampf(p->attack_s / total, 0.04f, 0.38f);
+  float d = clampf(p->decay_s / total, 0.06f, 0.38f);
+  float r = clampf(p->release_s / total, 0.06f, 0.38f);
+  float sustain = clampf(p->sustain, 0.0f, 1.0f);
+  float sustain_start = a + d;
+  float release_start = 1.0f - r;
+  if (release_start < sustain_start + 0.08f) release_start = sustain_start + 0.08f;
+  if (release_start > 0.92f) release_start = 0.92f;
+
+  fm1_platform_lcd_rect(x0, y0 + h, w, 1, COL_PANEL);
+  for (int i = 0; i < 74; ++i) {
+    float x = (float)i / 73.0f;
+    float level;
+    if (x < a) level = x / a;
+    else if (x < sustain_start) {
+      float t = (x - a) / d;
+      level = 1.0f + (sustain - 1.0f) * t;
+    } else if (x < release_start) level = sustain;
+    else {
+      float t = (x - release_start) / (1.0f - release_start);
+      level = sustain * (1.0f - t);
+    }
+    int px = x0 + i * 3;
+    int py = y0 + h - 2 - (int)(clampf(level, 0.0f, 1.0f) * (float)(h - 4));
+    fm1_platform_lcd_rect(px, py, 2, 2, COL_ACCENT);
+  }
+  fm1_platform_lcd_text(10, 184, "A       D       S       R", COL_DIM);
+}
+
 void fm_ui_init(fm_ui_state_t *ui) {
   memset(ui, 0, sizeof(*ui));
   ui->page = FM_UI_OSC;
@@ -180,8 +239,10 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
     fm1_platform_lcd_text(16, 172, ui->hold ? "HOLD: FINE" : "PRESS KNOB: BACK", COL_TEXT);
   } else {
     for (int i = 0; i < 4; ++i) draw_value(8 + i * 56, 66, label[i], value[i], 0);
-    fm1_platform_lcd_text(8, 139, "ENC1      ENC2      ENC3      ENC4", COL_DIM);
-    fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / FINE" : "PRESS ENCODER = FOCUS", COL_TEXT);
+    fm1_platform_lcd_text(8, 136, "ENC1      ENC2      ENC3      ENC4", COL_DIM);
+    if (ui->page == FM_UI_FILTER) draw_filter_graph(p);
+    else if (ui->page == FM_UI_CONTOUR) draw_contour_graph(p);
+    else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / FINE" : "PRESS ENCODER = FOCUS", COL_TEXT);
   }
 
   if (ui->playing) fm1_platform_lcd_rect(215, 8, 16, 8, COL_RED);
