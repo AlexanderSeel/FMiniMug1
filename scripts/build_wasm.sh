@@ -29,6 +29,7 @@ emcc \
   -Wl,--export=fmm_reset \
   -Wl,--export=fmm_set_param \
   -Wl,--export=fmm_note_on \
+  -Wl,--export=fmm_note_off_note \
   -Wl,--export=fmm_note_off \
   -Wl,--export=fmm_seq_clear \
   -Wl,--export=fmm_seq_set_meta \
