@@ -4,6 +4,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUT="$ROOT/web/public/dsp"
 mkdir -p "$OUT"
+cd "$ROOT"
 
 if ! command -v emcc >/dev/null 2>&1; then
   echo "error: emcc not found. Install Emscripten or run inside the CI toolchain." >&2
