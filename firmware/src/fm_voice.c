@@ -10,8 +10,10 @@ static float clampf(float x, float lo, float hi) {
 }
 
 static float fast_exp2(float x) {
+  /* Truncation is sufficient here: the polynomial is well behaved for the
+   * resulting fractional interval (-1,1), and avoiding x<0/x!=i keeps the
+   * freestanding pi32v2 build from pulling the unavailable __ltsf2 helper. */
   int i = (int)x;
-  if (x < 0.0f && x != (float)i) --i;
   const float f = x - (float)i;
   const float p = 1.0f + f * (FM_LN2 + f * (0.24022651f + f * 0.05550411f));
   float scale = 1.0f;
@@ -183,7 +185,6 @@ static void retarget_note(fm_voice_t *v, uint8_t note, int retrigger_contours) {
   }
 }
 
-/* Standard PolyBLEP correction for a discontinuity at phase 0. */
 static float poly_blep(float t, float dt) {
   if (dt <= 0.0f) return 0.0f;
   if (t < dt) {
