@@ -1,4 +1,4 @@
-import React, {useEffect,useMemo,useRef,useState} from 'react';
+import React, {useEffect,useRef,useState} from 'react';
 import {PATCHES, SEQS, type Patch} from './data';
 import {engine, type EngineMode, type Meter} from './audio/engine';
 import './styles.css';
@@ -154,14 +154,14 @@ export default function App(){
   const ampControls=<><Knob label="A ATTACK" value={patch.attack} min={.001} max={2} onChange={v=>update('attack',v)} unit="s"/><Knob label="A DECAY" value={patch.decay} min={.02} max={3} onChange={v=>update('decay',v)} unit="s"/><Knob label="A SUSTAIN" value={patch.sustain} min={.01} max={1} onChange={v=>update('sustain',v)}/><SwitchControl label="LOUDNESS DECAY" on={ampDecaySwitch} onToggle={toggleAmpDecay} onText="DECAY" offText="RELEASE" hint={ampDecaySwitch?'release uses decay time':'independent release'}/></>;
   const filterControls=<><Knob label="F ATTACK" value={filterContour[0]} min={.001} max={2} onChange={v=>setFilterEnv(0,v)} unit="s"/><Knob label="F DECAY" value={filterContour[1]} min={.02} max={3} onChange={v=>setFilterEnv(1,v)} unit="s"/><Knob label="F SUSTAIN" value={filterContour[2]} min={.01} max={1} onChange={v=>setFilterEnv(2,v)}/><SwitchControl label="FILTER DECAY" on={filterDecaySwitch} onToggle={toggleFilterDecay} onText="DECAY" offText="RELEASE" hint={filterDecaySwitch?'release uses decay time':'independent release'}/></>;
 
-  const controls=useMemo(()=>({
+  const controls=({
     OSC:<><RangeControl label="OSC1" value={ranges[0]} onChange={v=>setRange(0,v)}/><RangeControl label="OSC2" value={ranges[1]} onChange={v=>setRange(1,v)}/><RangeControl label="OSC3" value={ranges[2]} onChange={v=>setRange(2,v)}/><label className="knob rangeControl"><span>GLIDE</span><strong>{GLIDE_LABELS[glideMode]}</strong><select value={glideMode} onChange={e=>changeGlideMode(+e.target.value)}>{GLIDE_LABELS.map((x,i)=><option key={x} value={i}>{x}</option>)}</select><Knob label="TIME / RATE" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)} unit="s"/></label></>,
     MIX:<><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Detune 2" value={patch.detune[1]} min={-24} max={24} onChange={v=>update('detune',[patch.detune[0],v,patch.detune[2]])}/><Knob label="Detune 3" value={patch.detune[2]} min={-24} max={24} onChange={v=>update('detune',[patch.detune[0],patch.detune[1],v])}/></>,
     FILTER:<><Knob label="Cutoff" value={patch.cutoff} min={80} max={9000} onChange={v=>update('cutoff',v)} unit="Hz"/><Knob label="Emphasis" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><Knob label="Contour" value={patch.env} min={0} max={7000} onChange={v=>update('env',v)}/><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/></>,
     CONTOUR:<>{contourTarget==='amp'?ampControls:filterControls}</>,
     MOD:<><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)}/><label className="knob rangeControl"><span>NOTE PRIORITY</span><strong>{PRIORITY_LABELS[priority]}</strong><select value={priority} onChange={e=>changePriority(+e.target.value)}>{PRIORITY_LABELS.map((x,i)=><option value={i} key={x}>{x}</option>)}</select><b>low / high / last</b></label><label className="knob rangeControl"><span>ENVELOPE MODE</span><strong>{retrigger?'RETRIGGER':'LEGATO'}</strong><button onClick={toggleRetrigger}>{retrigger?'EVERY NOTE':'SINGLE TRIGGER'}</button><b>classic legato behavior</b></label></>,
     SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)}><small>{i+1}</small>{n}</button>)}</div>
-  })[page],[patch,seq,playing,activeStep,ranges,filterContour,contourTarget,retrigger,priority,ampDecaySwitch,filterDecaySwitch,glideMode]);
+  } as const)[page as keyof typeof panelControlsPlaceholder];
 
   const keys=[48,50,52,53,55,57,59,60,62,64,65,67,69,71,72];
   const contourText=contourTarget==='amp'?[patch.attack,patch.decay,patch.sustain,patch.release]:filterContour;
@@ -180,3 +180,5 @@ export default function App(){
     <footer>Original FMiniMug1 UI and sound bank · native DSP and sequencer shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
   </main>;
 }
+
+const panelControlsPlaceholder={OSC:null,MIX:null,FILTER:null,CONTOUR:null,MOD:null,SEQ:null};
