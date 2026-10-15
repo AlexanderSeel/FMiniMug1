@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "parameters": [
     {"id":0,"c":"FMM_OSC1_LEVEL","ts":"osc1Level"},
     {"id":1,"c":"FMM_OSC2_LEVEL","ts":"osc2Level"},
@@ -23,6 +23,14 @@
     {"id":19,"c":"FMM_DRIFT","ts":"drift"},
     {"id":20,"c":"FMM_FEEDBACK","ts":"feedback"},
     {"id":21,"c":"FMM_FILTER_KEYTRACK","ts":"keytrack"},
-    {"id":22,"c":"FMM_OVERSAMPLE_2X","ts":"oversample"}
+    {"id":22,"c":"FMM_OVERSAMPLE_2X","ts":"oversample"},
+    {"id":23,"c":"FMM_OSC1_RANGE","ts":"osc1Range"},
+    {"id":24,"c":"FMM_OSC2_RANGE","ts":"osc2Range"},
+    {"id":25,"c":"FMM_OSC3_RANGE","ts":"osc3Range"},
+    {"id":26,"c":"FMM_FILTER_ATTACK","ts":"filterAttack"},
+    {"id":27,"c":"FMM_FILTER_DECAY","ts":"filterDecay"},
+    {"id":28,"c":"FMM_FILTER_SUSTAIN","ts":"filterSustain"},
+    {"id":29,"c":"FMM_FILTER_RELEASE","ts":"filterRelease"},
+    {"id":30,"c":"FMM_RETRIGGER","ts":"retrigger"}
   ]
 }
