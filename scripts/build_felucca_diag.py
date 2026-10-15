@@ -59,12 +59,26 @@ def run(cmd: list[str], *, capture: bool = False) -> str:
     return proc.stdout if capture else ""
 
 
-def find_softfloat_runtime(toolchain: Path) -> Path:
-    """Find the pi32v2 archive containing the soft-float helper symbol.
+def archive_defines(objdump: Path, archive: Path, symbol: str) -> bool:
+    proc = subprocess.run([str(objdump), "-t", str(archive)], cwd=ROOT, text=True, capture_output=True)
+    if proc.returncode != 0:
+        return False
+    for line in proc.stdout.splitlines():
+        if symbol not in line:
+            continue
+        if "*UND*" in line or " UND " in line:
+            continue
+        if re.search(rf"\b{re.escape(symbol)}\b", line):
+            return True
+    return False
 
-    JieLi toolchain layouts vary and some bundles omit nm. Archive symbol names
-    are stored as ASCII in the ar/object data, so matching __subsf3 in bytes is
-    sufficient for discovery; the linker remains the authority on compatibility.
+
+def find_softfloat_runtime(toolchain: Path, objdump: Path) -> Path:
+    """Find a pi32v2-compatible archive that actually defines __subsf3.
+
+    Simple byte matching is insufficient because libc archives may reference
+    the helper without defining it. The JieLi common objdump can inspect the
+    pi32v2 archive symbol table, so only a real definition is accepted.
     """
     candidates: list[Path] = []
     preferred = ("*builtins*.a", "libgcc*.a", "libclang_rt*.a", "*compiler*rt*.a")
@@ -79,17 +93,11 @@ def find_softfloat_runtime(toolchain: Path) -> Path:
             candidates.append(archive)
             seen.add(archive)
 
-    # Never pick the older pi32 ABI merely because its archive appears first.
-    # Prefer a runtime physically shipped under the pi32v2 subtree.
     candidates.sort(key=lambda p: (0 if "pi32v2" in p.parts else 1, str(p)))
-    needle = b"__subsf3"
     for archive in candidates:
-        try:
-            if needle in archive.read_bytes():
-                return archive
-        except OSError:
-            continue
-    fail("JieLi toolchain contains no archive mentioning __subsf3; cannot link float DSP")
+        if archive_defines(objdump, archive, "__subsf3"):
+            return archive
+    fail("JieLi toolchain contains no archive defining __subsf3 for the synth float DSP")
 
 
 def main() -> int:
@@ -142,7 +150,7 @@ def main() -> int:
     link_inputs = list(map(str, objects))
     runtime: Path | None = None
     if synth_check:
-        runtime = find_softfloat_runtime(tc)
+        runtime = find_softfloat_runtime(tc, objdump)
         link_inputs.append(str(runtime))
         print(f"softfloat_runtime={runtime}")
 
