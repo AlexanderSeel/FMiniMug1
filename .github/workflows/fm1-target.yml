@@ -8,7 +8,7 @@ env:
   FELUCCA_REF: a53ecf428c29c780108fd70a31b71a32a6b5c313
 
 jobs:
-  jieli-diagnostic-link:
+  jieli-target-link:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -36,6 +36,12 @@ jobs:
           python3 -m py_compile scripts/build_felucca_diag.py
           python3 scripts/build_felucca_diag.py
 
+      - name: Build full synth link check with synthetic control map
+        env:
+          FELUCCA_SRC: /tmp/felucca
+          JIELI_TOOLCHAIN: /tmp/jieli/toolchain
+        run: python3 scripts/build_felucca_diag.py --synth-check
+
       - name: Verify target artifacts and safety gates
         run: |
           test -s build/felucca-target/fminimug1-diag.elf
@@ -45,10 +51,24 @@ jobs:
           test -s build/felucca-target/BUILD-INFO.txt
           grep -q '^installable=no$' build/felucca-target/BUILD-INFO.txt
           grep -q '^flash_write_api=disabled$' build/felucca-target/BUILD-INFO.txt
+          grep -q '^control_map=raw-diagnostic$' build/felucca-target/BUILD-INFO.txt
+
+          test -s build/felucca-target/fminimug1-synth-check.elf
+          test -s build/felucca-target/fminimug1-synth-check.bin
+          test -s build/felucca-target/fminimug1-synth-check.dis
+          test -s build/felucca-target/SYNTH-CHECK-SHA256SUMS
+          test -s build/felucca-target/SYNTH-CHECK-INFO.txt
+          grep -q '^installable=no$' build/felucca-target/SYNTH-CHECK-INFO.txt
+          grep -q '^flash_write_api=disabled$' build/felucca-target/SYNTH-CHECK-INFO.txt
+          grep -q '^control_map=synthetic-not-for-hardware$' build/felucca-target/SYNTH-CHECK-INFO.txt
+
           if find build/felucca-target -type f -name '*.fwsc' | grep -q .; then
-            echo 'safety failure: diagnostic target generated an install package' >&2
+            echo 'safety failure: target link check generated an install package' >&2
             exit 1
           fi
 
-      - name: Print target build summary
-        run: cat build/felucca-target/BUILD-INFO.txt
+      - name: Print target build summaries
+        run: |
+          cat build/felucca-target/BUILD-INFO.txt
+          echo '---'
+          cat build/felucca-target/SYNTH-CHECK-INFO.txt
