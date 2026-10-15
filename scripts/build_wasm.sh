@@ -21,7 +21,8 @@ emcc \
   -s STANDALONE_WASM=1 \
   -s FILESYSTEM=0 \
   -s MALLOC=emmalloc \
-  -s INITIAL_MEMORY=1048576 \
+  -s TOTAL_STACK=131072 \
+  -s INITIAL_MEMORY=2097152 \
   -s ALLOW_MEMORY_GROWTH=0 \
   -Wl,--no-entry \
   -Wl,--export=fmm_init \
