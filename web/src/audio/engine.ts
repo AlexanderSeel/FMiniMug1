@@ -4,6 +4,21 @@ import {PARAM} from '../generated/params';
 const midiToHz=(n:number)=>440*Math.pow(2,(n-69)/12);
 const waveNumber=(w:Wave)=>w==='triangle'?0:w==='sawtooth'?1:2;
 const rangeSemitones=(r:number)=>[-24,-12,0,12,24][Math.max(0,Math.min(4,Math.round(r)))];
+const assetUrl=(path:string)=>new URL(`${import.meta.env.BASE_URL}${path}`,document.baseURI).toString();
+
+async function loadWasmBytes(url:string){
+  const response=await fetch(url);
+  if(!response.ok)throw new Error(`DSP ${response.status} ${response.statusText} at ${url}`);
+  const bytes=await response.arrayBuffer();
+  const magic=new Uint8Array(bytes,0,Math.min(4,bytes.byteLength));
+  const valid=magic.length===4&&magic[0]===0x00&&magic[1]===0x61&&magic[2]===0x73&&magic[3]===0x6d;
+  if(!valid){
+    const type=response.headers.get('content-type')||'unknown content type';
+    const head=[...magic].map(x=>x.toString(16).padStart(2,'0')).join(' ');
+    throw new Error(`DSP asset at ${url} is not WebAssembly (${type}; first bytes ${head||'empty'}). Check deployment base/static routing.`);
+  }
+  return bytes;
+}
 
 class WebAudioFallback {
   ctx:AudioContext;
@@ -112,9 +127,11 @@ export class MiniEngine {
       this.analyser.connect(this.master);this.master.connect(this.ctx.destination);
       try{
         if(!this.ctx.audioWorklet)throw new Error('AudioWorklet unavailable');
+        const wasmUrl=assetUrl('dsp/fminimug1.wasm');
+        const workletUrl=assetUrl('dsp/fminimug1-worklet.js');
         const [bytes]=await Promise.all([
-          fetch('/dsp/fminimug1.wasm').then(r=>{if(!r.ok)throw new Error(`DSP ${r.status}`);return r.arrayBuffer()}),
-          this.ctx.audioWorklet.addModule('/dsp/fminimug1-worklet.js')
+          loadWasmBytes(wasmUrl),
+          this.ctx.audioWorklet.addModule(workletUrl)
         ]);
         const node=new AudioWorkletNode(this.ctx,'fminimug1-dsp',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{wasmBytes:bytes}});
         node.connect(this.analyser);
