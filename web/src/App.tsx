@@ -14,7 +14,7 @@ function Knob({label,value,min,max,onChange,unit=''}:{label:string,value:number,
 function Diagnostics(){
   const canvas=useRef<HTMLCanvasElement|null>(null);
   const [mode,setMode]=useState<EngineMode>(engine.mode);
-  const [meter,setMeter]=useState<Meter>({peak:0,rms:0});
+  const [meter,setMeter]=useState<Meter>({peak:0,rms:0,step:0});
 
   useEffect(()=>{
     const offMode=engine.onMode(setMode);
@@ -34,7 +34,7 @@ function Diagnostics(){
           const base=c.height*.58;
           g.fillStyle='rgba(242,166,64,.45)';
           const count=64,bw=c.width/count;
-          for(let i=0;i<count;i++){const v=bins[Math.floor(i*bins.length/count)]/255;g.fillRect(i*bw, c.height, Math.max(1,bw-1), -(c.height-base)*v)}
+          for(let i=0;i<count;i++){const v=bins[Math.floor(i*bins.length/count)]/255;g.fillRect(i*bw,c.height,Math.max(1,bw-1),-(c.height-base)*v)}
         }
       }
       frame=requestAnimationFrame(draw);
@@ -44,7 +44,7 @@ function Diagnostics(){
   },[]);
 
   return <div className="diagnostics">
-    <div className="diagHead"><strong>DSP MONITOR</strong><span className={`engineMode ${mode}`}>{mode==='native-wasm'?'NATIVE DSP / WASM':mode==='web-audio-fallback'?'WEB AUDIO FALLBACK':'DSP IDLE'}</span></div>
+    <div className="diagHead"><strong>DSP MONITOR</strong><span>STEP {String((meter.step??0)+1).padStart(2,'0')}</span><span className={`engineMode ${mode}`}>{mode==='native-wasm'?'NATIVE DSP / WASM':mode==='web-audio-fallback'?'WEB AUDIO FALLBACK':'DSP IDLE'}</span></div>
     <canvas ref={canvas} width={620} height={118}/>
     <div className="meters"><span>PEAK {(meter.peak*100).toFixed(1)}%</span><i><b style={{width:`${Math.min(100,meter.peak*100)}%`}}/></i><span>RMS {(meter.rms*100).toFixed(1)}%</span><i><b style={{width:`${Math.min(100,meter.rms*100)}%`}}/></i></div>
   </div>;
@@ -55,8 +55,6 @@ export default function App(){
   const [page,setPage]=useState('OSC');
   const [seq,setSeq]=useState(SEQS[0]);
   const [playing,setPlaying]=useState(false);
-  const timer=useRef<number|undefined>(undefined);
-  const step=useRef(0);
   const [midi,setMidi]=useState('not connected');
 
   const update=(k:keyof Patch,v:Patch[keyof Patch])=>{
@@ -77,13 +75,18 @@ export default function App(){
     return()=>{removeEventListener('keydown',down);removeEventListener('keyup',up)};
   },[patch]);
 
-  useEffect(()=>()=>{if(timer.current)clearInterval(timer.current)},[]);
+  useEffect(()=>()=>engine.stopSequence(),[]);
 
-  const toggleSeq=()=>{
-    if(playing){if(timer.current)clearInterval(timer.current);timer.current=undefined;setPlaying(false);stop();return}
-    setPlaying(true);step.current=0;
-    const tick=()=>{const i=step.current++%seq.notes.length;play(seq.notes[i]);setTimeout(stop,60000/seq.bpm*seq.gates[i])};
-    tick();timer.current=window.setInterval(tick,60000/seq.bpm);
+  const toggleSeq=async()=>{
+    if(playing){engine.stopSequence();setPlaying(false);return}
+    await engine.startSequence(seq);
+    setPlaying(true);
+  };
+
+  const chooseSequence=async(name:string)=>{
+    const next=SEQS.find(x=>x.name===name)!;
+    setSeq(next);
+    if(playing)await engine.startSequence(next);
   };
 
   const connectMidi=async()=>{
@@ -113,9 +116,9 @@ export default function App(){
       <nav>{['OSC','MIX','FILTER','CONTOUR','MOD','SEQ'].map(x=><button key={x} className={page===x?'active':''} onClick={()=>setPage(x)}>{x}</button>)}</nav>
       <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`A ${patch.attack.toFixed(2)} D ${patch.decay.toFixed(2)} S ${Math.round(patch.sustain*100)} R ${patch.release.toFixed(2)}`:'4 ENCODERS · HOLD = FINE · PRESS = FOCUS'}</i></div><div className="controls">{controls}</div></div>
       <Diagnostics/>
-      <div className="seqbar"><select value={seq.name} onChange={e=>setSeq(SEQS.find(x=>x.name===e.target.value)!)}>{SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={toggleSeq}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · Keyboard: A W S E D F T G Z H U J K O L</span></div>
+      <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · native sample-clock transport · Keyboard: A W S E D F T G Z H U J K O L</span></div>
       <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={stop} onMouseLeave={stop}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
     </section>
-    <footer>Original FMiniMug1 UI and sound bank · native DSP shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
+    <footer>Original FMiniMug1 UI and sound bank · native DSP and sequencer shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
   </main>;
 }
