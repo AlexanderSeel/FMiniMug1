@@ -16,6 +16,7 @@ emcc \
   -std=c11 \
   -Ifirmware/include \
   firmware/src/fm_voice.c \
+  firmware/src/fm_seq.c \
   firmware/wasm/fm_voice_wasm.c \
   -s STANDALONE_WASM=1 \
   -s FILESYSTEM=0 \
@@ -28,6 +29,12 @@ emcc \
   -Wl,--export=fmm_set_param \
   -Wl,--export=fmm_note_on \
   -Wl,--export=fmm_note_off \
+  -Wl,--export=fmm_seq_clear \
+  -Wl,--export=fmm_seq_set_meta \
+  -Wl,--export=fmm_seq_set_step \
+  -Wl,--export=fmm_seq_start \
+  -Wl,--export=fmm_seq_stop \
+  -Wl,--export=fmm_seq_step \
   -Wl,--export=fmm_render \
   -Wl,--export-memory \
   -o "$OUT/fminimug1.wasm"
