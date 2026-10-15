@@ -1,14 +1,7 @@
 import {PATCHES, type Patch, type Wave} from '../data';
+import {PARAM} from '../generated/params';
 
 const midiToHz=(n:number)=>440*Math.pow(2,(n-69)/12);
-const PARAM={
-  osc1Level:0,osc2Level:1,osc3Level:2,
-  osc1Wave:3,osc2Wave:4,osc3Wave:5,
-  osc1Semi:6,osc2Semi:7,osc3Semi:8,
-  cutoff:9,res:10,env:11,attack:12,decay:13,sustain:14,release:15,
-  glide:16,mixerDrive:17,filterDrive:18,drift:19,feedback:20,keytrack:21,oversample:22
-} as const;
-
 const waveNumber=(w:Wave)=>w==='triangle'?0:w==='sawtooth'?1:2;
 
 class WebAudioFallback {
