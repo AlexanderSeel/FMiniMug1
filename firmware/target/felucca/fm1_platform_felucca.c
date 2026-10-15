@@ -3,8 +3,9 @@
  */
 #include "fm1_platform.h"
 #include "fm1_felucca_target.h"
-/* Felucca fm1_audio.h calls fm1_irq_attach() from an inline function, so the
- * IRQ HAL must be visible first in this translation unit. */
+/* Felucca fm1_irq.h consumes FM1_RESET_PREP from fm1_sys.h, and
+ * fm1_audio.h calls fm1_irq_attach() from an inline function. Keep this order. */
+#include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_audio.h"
 #include "fm1_input.h"
