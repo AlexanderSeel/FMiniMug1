@@ -19,6 +19,9 @@ int main(void) {
   fm_voice_t voice;
   fm_voice_init(&voice, 48000.0f);
   assert(voice.patch.oversample_2x == 1);
+  assert(voice.patch.osc[0].range == FM_RANGE_8);
+  assert(voice.patch.filter_attack_s == voice.patch.attack_s);
+  assert(voice.patch.retrigger == 0);
 
   voice.patch.osc[0].wave = FM_WAVE_SAW;
   voice.patch.osc[1].wave = FM_WAVE_SQUARE;
@@ -34,10 +37,42 @@ int main(void) {
   voice.patch.filter_drive = 1.3f;
   voice.patch.drift = 0.2f;
 
+  /* 8' is neutral; classic range switches move by octaves around it. */
+  fm_voice_note_on(&voice, 60, 112);
+  const float freq_8 = voice.target_freq[0];
+  voice.patch.osc[0].range = FM_RANGE_16;
+  fm_voice_note_on(&voice, 60, 112);
+  const float freq_16 = voice.target_freq[0];
+  assert(fabsf(freq_16 * 2.0f - freq_8) < 0.05f);
+  voice.patch.osc[0].range = FM_RANGE_4;
+  fm_voice_note_on(&voice, 60, 112);
+  assert(fabsf(voice.target_freq[0] - freq_8 * 2.0f) < 0.05f);
+  voice.patch.osc[0].range = FM_RANGE_8;
+
+  /* Filter and loudness contours evolve independently. */
+  voice.patch.attack_s = 0.001f;
+  voice.patch.filter_attack_s = 0.5f;
+  voice.env_amp = 0.0f;
+  voice.env_filter = 0.0f;
+  voice.gate = 0.0f;
   fm_voice_note_on(&voice, 36, 112);
-  const float attack_peak = render_peak(&voice, 48000);
+  render_peak(&voice, 2400);
+  assert(voice.env_amp > voice.env_filter);
+
+  const float attack_peak = render_peak(&voice, 45600);
   assert(attack_peak > 0.01f);
 
+  /* Legato leaves contours running, retrigger mode explicitly restarts them. */
+  const float before_legato = voice.env_amp;
+  voice.patch.retrigger = 0;
+  fm_voice_note_on(&voice, 48, 112);
+  assert(voice.env_amp == before_legato);
+  voice.patch.retrigger = 1;
+  fm_voice_note_on(&voice, 52, 112);
+  assert(voice.env_amp == 0.0f);
+  assert(voice.env_filter == 0.0f);
+
+  voice.patch.retrigger = 0;
   fm_voice_note_on(&voice, 72, 127);
   const float high_peak = render_peak(&voice, 12000);
   assert(high_peak > 0.005f);
