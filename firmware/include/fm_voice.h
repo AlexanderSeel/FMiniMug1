@@ -23,6 +23,11 @@ typedef enum {
 } fm_note_priority_t;
 
 typedef enum {
+  FM_GLIDE_TIME = 0,
+  FM_GLIDE_RATE
+} fm_glide_mode_t;
+
+typedef enum {
   FM_ENV_ATTACK = 0,
   FM_ENV_DECAY,
   FM_ENV_SUSTAIN,
@@ -61,6 +66,11 @@ typedef struct {
   uint8_t oversample_2x;
   uint8_t retrigger;
   uint8_t note_priority;
+  /* When enabled, key release reuses the contour's DECAY time, matching the
+   * classic decay-switch workflow. Disabled keeps the extended RELEASE time. */
+  uint8_t amp_decay_switch;
+  uint8_t filter_decay_switch;
+  uint8_t glide_mode;
 } fm_patch_t;
 
 typedef struct {
@@ -91,6 +101,7 @@ typedef struct {
   float filter_decay_k;
   float filter_release_k;
   float glide_k;
+  float glide_rate_k;
   float keytrack_ratio;
   float cache_attack_s;
   float cache_decay_s;
@@ -102,6 +113,7 @@ typedef struct {
   uint8_t cache_keytrack;
   uint8_t cache_keynote;
   uint8_t cache_oversample;
+  uint8_t cache_glide_mode;
 } fm_voice_t;
 
 void fm_voice_init(fm_voice_t *v, float sample_rate);

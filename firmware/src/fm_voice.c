@@ -110,10 +110,15 @@ static void refresh_cached_coeffs(fm_voice_t *v, float sr, int os) {
     v->cache_filter_release_s = v->patch.filter_release_s;
     v->filter_release_k = time_coeff(v->patch.filter_release_s, sr);
   }
-  if (v->cache_glide_s != v->patch.glide_s || v->cache_oversample != (uint8_t)os) {
+  if (v->cache_glide_s != v->patch.glide_s ||
+      v->cache_oversample != (uint8_t)os ||
+      v->cache_glide_mode != v->patch.glide_mode) {
+    const float sub_sr = sr * (float)os;
     v->cache_glide_s = v->patch.glide_s;
     v->cache_oversample = (uint8_t)os;
-    v->glide_k = v->patch.glide_s <= 0.0f ? 1.0f : time_coeff(v->patch.glide_s, sr * (float)os);
+    v->cache_glide_mode = v->patch.glide_mode;
+    v->glide_k = v->patch.glide_s <= 0.0f ? 1.0f : time_coeff(v->patch.glide_s, sub_sr);
+    v->glide_rate_k = v->patch.glide_s <= 0.0f ? 1.0f : FM_LN2 / (v->patch.glide_s * sub_sr);
   }
   if (v->cache_keytrack != v->patch.filter_keytrack || v->cache_keynote != v->current_note) {
     v->cache_keytrack = v->patch.filter_keytrack;
@@ -185,6 +190,21 @@ static void retarget_note(fm_voice_t *v, uint8_t note, int retrigger_contours) {
   }
 }
 
+static float glide_tick(const fm_voice_t *v, float current, float target) {
+  if (v->patch.glide_s <= 0.0f) return target;
+  const float diff = target - current;
+  if (v->patch.glide_mode == FM_GLIDE_RATE) {
+    /* Constant pitch rate: approximately one octave per glide_s. Euler's
+     * df/dt = ln(2)*f/T avoids log/exp in the real-time path. */
+    const float basis = current > 20.0f ? current : 20.0f;
+    const float step = basis * v->glide_rate_k;
+    if (diff > step) return current + step;
+    if (diff < -step) return current - step;
+    return target;
+  }
+  return current + diff * v->glide_k;
+}
+
 static float poly_blep(float t, float dt) {
   if (dt <= 0.0f) return 0.0f;
   if (t < dt) {
@@ -230,12 +250,14 @@ static float osc_sample(fm_voice_t *v, int index, fm_wave_t wave, float phase, f
 }
 
 static void update_envelopes(fm_voice_t *v) {
+  const float amp_release = v->patch.amp_decay_switch ? v->amp_decay_k : v->amp_release_k;
+  const float filter_release = v->patch.filter_decay_switch ? v->filter_decay_k : v->filter_release_k;
   v->env_amp = envelope_tick(v->env_amp, &v->env_amp_stage,
                              v->amp_attack_k, v->amp_decay_k,
-                             v->patch.sustain, v->amp_release_k);
+                             v->patch.sustain, amp_release);
   v->env_filter = envelope_tick(v->env_filter, &v->env_filter_stage,
                                 v->filter_attack_k, v->filter_decay_k,
-                                v->patch.filter_sustain, v->filter_release_k);
+                                v->patch.filter_sustain, filter_release);
 }
 
 static float ladder_tick(fm_voice_t *v, float input, float cutoff_hz, float sub_sr) {
@@ -276,6 +298,7 @@ void fm_voice_init(fm_voice_t *v, float sample_rate) {
   v->cache_keynote = 0xFFu;
   v->cache_keytrack = 0xFFu;
   v->cache_oversample = 0xFFu;
+  v->cache_glide_mode = 0xFFu;
   v->keytrack_ratio = 1.0f;
   v->patch.cutoff_hz = 1000.0f;
   v->patch.resonance = 0.2f;
@@ -293,6 +316,9 @@ void fm_voice_init(fm_voice_t *v, float sample_rate) {
   v->patch.oversample_2x = 1;
   v->patch.retrigger = 0;
   v->patch.note_priority = FM_NOTE_LOW;
+  v->patch.amp_decay_switch = 0u;
+  v->patch.filter_decay_switch = 0u;
+  v->patch.glide_mode = FM_GLIDE_TIME;
   for (int i = 0; i < 3; ++i) {
     v->patch.osc[i].wave = FM_WAVE_SAW;
     v->patch.osc[i].level = i == 0 ? 0.8f : 0.35f;
@@ -307,6 +333,9 @@ void fm_voice_set_patch(fm_voice_t *v, const fm_patch_t *p) {
     if (v->patch.osc[i].range > FM_RANGE_2) v->patch.osc[i].range = FM_RANGE_8;
   }
   if (v->patch.note_priority > FM_NOTE_LAST) v->patch.note_priority = FM_NOTE_LOW;
+  if (v->patch.glide_mode > FM_GLIDE_RATE) v->patch.glide_mode = FM_GLIDE_TIME;
+  v->patch.amp_decay_switch = v->patch.amp_decay_switch != 0u;
+  v->patch.filter_decay_switch = v->patch.filter_decay_switch != 0u;
 }
 
 void fm_voice_note_on(fm_voice_t *v, uint8_t note, uint8_t velocity) {
@@ -368,7 +397,7 @@ float fm_voice_process(fm_voice_t *v) {
       const float drift_cents = v->drift_state[i] * v->patch.drift * 7.0f;
       const float drift_ratio = 1.0f + drift_cents * FM_CENTS_TO_RATIO;
       const float tf = v->target_freq[i] * drift_ratio;
-      v->freq[i] += (tf - v->freq[i]) * v->glide_k;
+      v->freq[i] = glide_tick(v, v->freq[i], tf);
 
       const float dt = clampf(v->freq[i] / sub_sr, 0.0000001f, 0.45f);
       v->phase[i] += dt;

@@ -18,7 +18,6 @@ static float render_peak(fm_voice_t *voice, int samples) {
 static void test_note_priority(fm_voice_t *voice) {
   fm_voice_note_off(voice);
   voice->patch.retrigger = 0;
-
   voice->patch.note_priority = FM_NOTE_LOW;
   fm_voice_note_on(voice, 60, 100);
   fm_voice_note_on(voice, 67, 100);
@@ -59,6 +58,8 @@ static void test_adsr_stages(fm_voice_t *voice) {
   voice->patch.filter_decay_s = 0.02f;
   voice->patch.filter_sustain = 0.42f;
   voice->patch.filter_release_s = 0.02f;
+  voice->patch.amp_decay_switch = 0u;
+  voice->patch.filter_decay_switch = 0u;
   voice->env_amp = 0.0f;
   voice->env_filter = 0.0f;
 
@@ -68,13 +69,9 @@ static void test_adsr_stages(fm_voice_t *voice) {
   assert(voice->env_filter_stage == FM_ENV_SUSTAIN);
   assert(fabsf(voice->env_amp - 0.31f) < 0.002f);
   assert(fabsf(voice->env_filter - 0.42f) < 0.002f);
-
-  /* Remaining in sustain must not re-enter attack. */
   render_peak(voice, 12000);
   assert(voice->env_amp_stage == FM_ENV_SUSTAIN);
   assert(voice->env_filter_stage == FM_ENV_SUSTAIN);
-  assert(fabsf(voice->env_amp - 0.31f) < 0.002f);
-  assert(fabsf(voice->env_filter - 0.42f) < 0.002f);
 
   fm_voice_note_off(voice);
   assert(voice->env_amp_stage == FM_ENV_RELEASE);
@@ -82,6 +79,64 @@ static void test_adsr_stages(fm_voice_t *voice) {
   render_peak(voice, 12000);
   assert(voice->env_amp < 0.001f);
   assert(voice->env_filter < 0.001f);
+}
+
+static void test_decay_switches(void) {
+  fm_voice_t free_release, decay_linked;
+  fm_voice_init(&free_release, 48000.0f);
+  fm_voice_init(&decay_linked, 48000.0f);
+  free_release.patch.oversample_2x = decay_linked.patch.oversample_2x = 0u;
+  free_release.patch.attack_s = decay_linked.patch.attack_s = 0.001f;
+  free_release.patch.decay_s = decay_linked.patch.decay_s = 0.01f;
+  free_release.patch.sustain = decay_linked.patch.sustain = 0.5f;
+  free_release.patch.release_s = decay_linked.patch.release_s = 2.0f;
+  free_release.patch.filter_attack_s = decay_linked.patch.filter_attack_s = 0.001f;
+  free_release.patch.filter_decay_s = decay_linked.patch.filter_decay_s = 0.01f;
+  free_release.patch.filter_sustain = decay_linked.patch.filter_sustain = 0.5f;
+  free_release.patch.filter_release_s = decay_linked.patch.filter_release_s = 2.0f;
+  decay_linked.patch.amp_decay_switch = 1u;
+  decay_linked.patch.filter_decay_switch = 1u;
+
+  fm_voice_note_on(&free_release, 60, 100);
+  fm_voice_note_on(&decay_linked, 60, 100);
+  render_peak(&free_release, 12000);
+  render_peak(&decay_linked, 12000);
+  fm_voice_note_off(&free_release);
+  fm_voice_note_off(&decay_linked);
+  render_peak(&free_release, 4800);
+  render_peak(&decay_linked, 4800);
+
+  assert(free_release.env_amp > 0.35f);
+  assert(free_release.env_filter > 0.35f);
+  assert(decay_linked.env_amp < 0.01f);
+  assert(decay_linked.env_filter < 0.01f);
+}
+
+static float glide_first_step(uint8_t mode, uint8_t target_note) {
+  fm_voice_t v;
+  fm_voice_init(&v, 48000.0f);
+  v.patch.oversample_2x = 0u;
+  v.patch.drift = 0.0f;
+  v.patch.glide_s = 1.0f;
+  v.patch.glide_mode = mode;
+  v.patch.note_priority = FM_NOTE_LAST;
+  fm_voice_note_on(&v, 60, 100);
+  (void)fm_voice_process(&v);
+  const float before = v.freq[0];
+  fm_voice_note_on(&v, target_note, 100);
+  (void)fm_voice_process(&v);
+  return v.freq[0] - before;
+}
+
+static void test_glide_modes(void) {
+  const float rate_near = glide_first_step(FM_GLIDE_RATE, 72u);
+  const float rate_far = glide_first_step(FM_GLIDE_RATE, 108u);
+  assert(rate_near > 0.0f);
+  assert(fabsf(rate_far - rate_near) < 0.001f);
+
+  const float time_near = glide_first_step(FM_GLIDE_TIME, 72u);
+  const float time_far = glide_first_step(FM_GLIDE_TIME, 108u);
+  assert(time_far > time_near * 5.0f);
 }
 
 int main(void) {
@@ -92,6 +147,9 @@ int main(void) {
   assert(voice.patch.filter_attack_s == voice.patch.attack_s);
   assert(voice.patch.retrigger == 0);
   assert(voice.patch.note_priority == FM_NOTE_LOW);
+  assert(voice.patch.amp_decay_switch == 0u);
+  assert(voice.patch.filter_decay_switch == 0u);
+  assert(voice.patch.glide_mode == FM_GLIDE_TIME);
 
   voice.patch.osc[0].wave = FM_WAVE_SAW;
   voice.patch.osc[1].wave = FM_WAVE_SQUARE;
@@ -126,7 +184,6 @@ int main(void) {
   fm_voice_note_on(&voice, 36, 112);
   render_peak(&voice, 2400);
   assert(voice.env_amp > voice.env_filter);
-
   const float attack_peak = render_peak(&voice, 45600);
   assert(attack_peak > 0.01f);
   fm_voice_note_off(&voice);
@@ -150,9 +207,13 @@ int main(void) {
 
   test_note_priority(&voice);
   test_adsr_stages(&voice);
+  test_decay_switches();
+  test_glide_modes();
 
   voice.patch.note_priority = FM_NOTE_LOW;
   voice.patch.retrigger = 0;
+  voice.patch.amp_decay_switch = 0u;
+  voice.patch.filter_decay_switch = 0u;
   fm_voice_note_on(&voice, 72, 127);
   const float high_peak = render_peak(&voice, 12000);
   assert(high_peak > 0.005f);

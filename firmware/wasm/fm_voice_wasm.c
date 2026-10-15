@@ -3,8 +3,6 @@
 #include "fm_params.h"
 #include <stdint.h>
 
-/* Stable browser ABI. Synthesis and sequencer timing remain in portable C so
- * browser and FM-1 can share the same oscillator/filter/envelope/clock path. */
 static fm_voice_t voice;
 static fm_seq_t sequencer;
 static float output[128];
@@ -88,6 +86,9 @@ void fmm_set_param(int id, float value) {
             voice.patch.note_priority = (uint8_t)mode;
             break;
         }
+        case FMM_AMP_DECAY_SWITCH: voice.patch.amp_decay_switch = value >= 0.5f; break;
+        case FMM_FILTER_DECAY_SWITCH: voice.patch.filter_decay_switch = value >= 0.5f; break;
+        case FMM_GLIDE_MODE: voice.patch.glide_mode = value >= 0.5f ? FM_GLIDE_RATE : FM_GLIDE_TIME; break;
         case FMM_PARAM_COUNT: break;
     }
 }
@@ -110,17 +111,13 @@ void fmm_note_off_note(int note) {
 }
 
 __attribute__((visibility("default")))
-void fmm_note_off(void) {
-    fm_voice_note_off(&voice);
-}
+void fmm_note_off(void) { fm_voice_note_off(&voice); }
 
 __attribute__((visibility("default")))
 void fmm_seq_clear(void) {
     if (!initialized) fmm_init(48000.0f);
     fm_seq_pattern_t p;
-    p.length = 16u;
-    p.bpm = 120u;
-    p.swing = 0u;
+    p.length = 16u; p.bpm = 120u; p.swing = 0u;
     for (uint8_t i = 0; i < FM_SEQ_MAX_STEPS; ++i) {
         p.steps[i].note = -1;
         p.steps[i].transpose = 0;
@@ -165,22 +162,9 @@ void fmm_seq_set_step(int index, int note, int transpose, int velocity, int gate
     step->flags = (uint8_t)flags;
 }
 
-__attribute__((visibility("default")))
-void fmm_seq_start(void) {
-    if (!initialized) fmm_init(48000.0f);
-    fm_seq_start(&sequencer);
-}
-
-__attribute__((visibility("default")))
-void fmm_seq_stop(void) {
-    fm_seq_stop(&sequencer);
-    fm_voice_note_off(&voice);
-}
-
-__attribute__((visibility("default")))
-int fmm_seq_step(void) {
-    return (int)sequencer.step_index;
-}
+__attribute__((visibility("default"))) void fmm_seq_start(void) { if (!initialized) fmm_init(48000.0f); fm_seq_start(&sequencer); }
+__attribute__((visibility("default"))) void fmm_seq_stop(void) { fm_seq_stop(&sequencer); fm_voice_note_off(&voice); }
+__attribute__((visibility("default"))) int fmm_seq_step(void) { return (int)sequencer.step_index; }
 
 __attribute__((visibility("default")))
 uintptr_t fmm_render(int frames) {
