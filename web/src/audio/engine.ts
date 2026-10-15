@@ -3,6 +3,7 @@ import {PARAM} from '../generated/params';
 
 const midiToHz=(n:number)=>440*Math.pow(2,(n-69)/12);
 const waveNumber=(w:Wave)=>w==='triangle'?0:w==='sawtooth'?1:2;
+const rangeSemitones=(r:number)=>[-24,-12,0,12,24][Math.max(0,Math.min(4,Math.round(r)))];
 
 class WebAudioFallback {
   ctx:AudioContext;
@@ -22,14 +23,15 @@ class WebAudioFallback {
     this.active=[];
   }
 
-  noteOn(note:number,p:Patch){
+  noteOn(note:number,p:Patch,ranges:[number,number,number],filterContour:[number,number,number,number]){
     this.stop(p);
     const c=this.ctx,now=c.currentTime;
     const f=c.createBiquadFilter();
+    const [fa,fd,fs]=filterContour;
     f.type='lowpass';f.Q.value=p.res*22;
     f.frequency.setValueAtTime(Math.max(80,p.cutoff*.55),now);
-    f.frequency.exponentialRampToValueAtTime(Math.min(15000,p.cutoff+p.env),now+p.attack+.01);
-    f.frequency.exponentialRampToValueAtTime(Math.max(80,p.cutoff+p.env*p.sustain),now+p.attack+p.decay+.02);
+    f.frequency.exponentialRampToValueAtTime(Math.min(15000,p.cutoff+p.env),now+fa+.01);
+    f.frequency.exponentialRampToValueAtTime(Math.max(80,p.cutoff+p.env*fs),now+fa+fd+.02);
     const sh=c.createWaveShaper();
     const curve=new Float32Array(1024);
     for(let i=0;i<curve.length;i++){const x=i/511.5-1;curve[i]=Math.tanh(x*p.drive)}
@@ -38,8 +40,9 @@ class WebAudioFallback {
     for(let i=0;i<3;i++){
       const o=c.createOscillator(),g=c.createGain();o.type=p.osc[i];
       const drift=(Math.random()-.5)*p.drift*3;
-      o.frequency.setValueAtTime(this.lastHz*Math.pow(2,(p.detune[i]+drift)/12),now);
-      o.frequency.exponentialRampToValueAtTime(target*Math.pow(2,(p.detune[i]+drift)/12),now+Math.max(.003,p.glide));
+      const semis=p.detune[i]+rangeSemitones(ranges[i])+drift;
+      o.frequency.setValueAtTime(this.lastHz*Math.pow(2,semis/12),now);
+      o.frequency.exponentialRampToValueAtTime(target*Math.pow(2,semis/12),now+Math.max(.003,p.glide));
       g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(Math.max(.0001,p.levels[i]),now+p.attack+.002);
       g.gain.exponentialRampToValueAtTime(Math.max(.0001,p.levels[i]*p.sustain),now+p.attack+p.decay+.004);
       o.connect(g);g.connect(f);o.start();this.active.push({o,g});
@@ -56,6 +59,9 @@ export class MiniEngine {
   patch:Patch=PATCHES[0];
   mode:EngineMode='idle';
   analyser:AnalyserNode|null=null;
+  ranges:[number,number,number]=[2,2,2];
+  filterContour:[number,number,number,number]=[this.patch.attack,this.patch.decay,this.patch.sustain,this.patch.release];
+  retrigger=false;
   private node:AudioWorkletNode|null=null;
   private master:GainNode|null=null;
   private fallback:WebAudioFallback|null=null;
@@ -69,6 +75,7 @@ export class MiniEngine {
   onMode(cb:(m:EngineMode)=>void){this.modeListeners.add(cb);cb(this.mode);return()=>this.modeListeners.delete(cb)}
   onMeter(cb:(m:Meter)=>void){this.meterListeners.add(cb);return()=>this.meterListeners.delete(cb)}
   private setMode(m:EngineMode){this.mode=m;for(const cb of this.modeListeners)cb(m)}
+  private sendParam(id:number,value:number){if(this.node)this.node.port.postMessage({type:'param',id,value})}
 
   async start(){
     if(this.starting)return this.starting;
@@ -111,13 +118,16 @@ export class MiniEngine {
     [PARAM.sustain,p.sustain],[PARAM.release,p.release],[PARAM.glide,p.glide],[PARAM.mixerDrive,p.drive],
     [PARAM.filterDrive,Math.max(.8,p.drive*.85)],[PARAM.drift,p.drift],[PARAM.feedback,Math.min(.48,p.res*.28)],
     [PARAM.keytrack,2],[PARAM.oversample,1],
-    [PARAM.osc1Range,2],[PARAM.osc2Range,2],[PARAM.osc3Range,2],
-    [PARAM.filterAttack,p.attack],[PARAM.filterDecay,p.decay],[PARAM.filterSustain,p.sustain],[PARAM.filterRelease,p.release],
-    [PARAM.retrigger,0]
+    [PARAM.osc1Range,this.ranges[0]],[PARAM.osc2Range,this.ranges[1]],[PARAM.osc3Range,this.ranges[2]],
+    [PARAM.filterAttack,this.filterContour[0]],[PARAM.filterDecay,this.filterContour[1]],[PARAM.filterSustain,this.filterContour[2]],[PARAM.filterRelease,this.filterContour[3]],
+    [PARAM.retrigger,this.retrigger?1:0]
   ]}
 
   applyPatch(p:Patch){this.patch=p;if(this.node)this.node.port.postMessage({type:'params',values:this.patchValues(p)})}
-  async noteOn(note:number,p=this.patch){await this.start();this.applyPatch(p);if(this.node)this.node.port.postMessage({type:'noteOn',note,velocity:112});else this.fallback?.noteOn(note,p)}
+  setOscRange(index:0|1|2,range:number){const n=Math.max(0,Math.min(4,Math.round(range)));this.ranges=[...this.ranges] as [number,number,number];this.ranges[index]=n;this.sendParam([PARAM.osc1Range,PARAM.osc2Range,PARAM.osc3Range][index],n)}
+  setFilterContour(values:[number,number,number,number]){this.filterContour=values;this.sendParam(PARAM.filterAttack,values[0]);this.sendParam(PARAM.filterDecay,values[1]);this.sendParam(PARAM.filterSustain,values[2]);this.sendParam(PARAM.filterRelease,values[3])}
+  setRetrigger(on:boolean){this.retrigger=on;this.sendParam(PARAM.retrigger,on?1:0)}
+  async noteOn(note:number,p=this.patch){await this.start();this.applyPatch(p);if(this.node)this.node.port.postMessage({type:'noteOn',note,velocity:112});else this.fallback?.noteOn(note,p,this.ranges,this.filterContour)}
   noteOff(p=this.patch){if(this.node)this.node.port.postMessage({type:'noteOff'});else this.fallback?.stop(p)}
 
   async startSequence(seq:Sequence){
@@ -133,7 +143,7 @@ export class MiniEngine {
     const tick=()=>{
       const i=this.fallbackStep++%seq.notes.length;
       const note=seq.notes[i];
-      this.fallback?.noteOn(note,this.patch);
+      this.fallback?.noteOn(note,this.patch,this.ranges,this.filterContour);
       if(this.fallbackGateTimer!==undefined)clearTimeout(this.fallbackGateTimer);
       this.fallbackGateTimer=window.setTimeout(()=>this.fallback?.stop(this.patch),60000/seq.bpm*seq.gates[i]);
     };
