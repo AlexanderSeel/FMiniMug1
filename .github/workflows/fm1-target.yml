@@ -36,11 +36,19 @@ jobs:
           python3 -m py_compile scripts/build_felucca_diag.py
           python3 scripts/build_felucca_diag.py
 
-      - name: Build autonomous audio budget diagnostic
+      - name: Build autonomous core audio budget diagnostic
         env:
           FELUCCA_SRC: /tmp/felucca
           JIELI_TOOLCHAIN: /tmp/jieli/toolchain
         run: python3 scripts/build_felucca_diag.py --audio-check
+
+      - name: Build full Studio audio stress diagnostic
+        env:
+          FELUCCA_SRC: /tmp/felucca
+          JIELI_TOOLCHAIN: /tmp/jieli/toolchain
+        run: |
+          python3 -m py_compile scripts/build_felucca_studio_stress.py
+          python3 scripts/build_felucca_studio_stress.py
 
       - name: Build full Studio synth link check with synthetic control map
         env:
@@ -68,7 +76,17 @@ jobs:
           grep -q '^flash_write_api=disabled$' build/felucca-target/AUDIO-CHECK-INFO.txt
           grep -q '^control_map=not-required-audio-diagnostic$' build/felucca-target/AUDIO-CHECK-INFO.txt
           grep -q '^audio_budget_ticks=69632$' build/felucca-target/AUDIO-CHECK-INFO.txt
-          grep -q '^oversampling_test=automatic-1x-2x$' build/felucca-target/AUDIO-CHECK-INFO.txt
+
+          test -s build/felucca-target/fminimug1-studio-stress.elf
+          test -s build/felucca-target/fminimug1-studio-stress.bin
+          test -s build/felucca-target/fminimug1-studio-stress.dis
+          test -s build/felucca-target/STUDIO-STRESS-SHA256SUMS
+          test -s build/felucca-target/STUDIO-STRESS-INFO.txt
+          grep -q '^installable=no$' build/felucca-target/STUDIO-STRESS-INFO.txt
+          grep -q '^flash_write_api=disabled$' build/felucca-target/STUDIO-STRESS-INFO.txt
+          grep -q '^control_map=not-required-studio-stress$' build/felucca-target/STUDIO-STRESS-INFO.txt
+          grep -q '^audio_budget_ticks=69632$' build/felucca-target/STUDIO-STRESS-INFO.txt
+          grep -q '^load=A-2x+B-1x+drums+character+2048-delay$' build/felucca-target/STUDIO-STRESS-INFO.txt
 
           test -s build/felucca-target/fminimug1-synth-check.elf
           test -s build/felucca-target/fminimug1-synth-check.bin
@@ -98,9 +116,10 @@ jobs:
 
           Test order:
           1. raw fminimug1-diag.bin: capture real control IDs
-          2. fminimug1-audio-check.bin: verify OVER stays 0 and listen for clicks
-          3. rebuild mapped Studio runtime with the captured IDs
-          4. only then test full synth on a physical unit
+          2. fminimug1-audio-check.bin: baseline core timing; OVER must stay 0
+          3. fminimug1-studio-stress.bin: A 2x + B 1x + drums + delay; OVER must stay 0
+          4. rebuild mapped Studio runtime with the captured IDs
+          5. only then test the full controlled synth on a physical unit
 
           No .fwsc is intentionally produced.
           EOF
@@ -110,6 +129,8 @@ jobs:
           cat build/felucca-target/BUILD-INFO.txt
           echo '---'
           cat build/felucca-target/AUDIO-CHECK-INFO.txt
+          echo '---'
+          cat build/felucca-target/STUDIO-STRESS-INFO.txt
           echo '---'
           cat build/felucca-target/SYNTH-CHECK-INFO.txt
 
@@ -124,14 +145,19 @@ jobs:
             build/felucca-target/fminimug1-audio-check.bin
             build/felucca-target/fminimug1-audio-check.elf
             build/felucca-target/fminimug1-audio-check.dis
+            build/felucca-target/fminimug1-studio-stress.bin
+            build/felucca-target/fminimug1-studio-stress.elf
+            build/felucca-target/fminimug1-studio-stress.dis
             build/felucca-target/fminimug1-synth-check.bin
             build/felucca-target/fminimug1-synth-check.elf
             build/felucca-target/fminimug1-synth-check.dis
             build/felucca-target/BUILD-INFO.txt
             build/felucca-target/AUDIO-CHECK-INFO.txt
+            build/felucca-target/STUDIO-STRESS-INFO.txt
             build/felucca-target/SYNTH-CHECK-INFO.txt
             build/felucca-target/SHA256SUMS
             build/felucca-target/AUDIO-CHECK-SHA256SUMS
+            build/felucca-target/STUDIO-STRESS-SHA256SUMS
             build/felucca-target/SYNTH-CHECK-SHA256SUMS
             build/felucca-target/HARDWARE-BETA-WARNING.txt
           retention-days: 14
