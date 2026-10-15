@@ -38,10 +38,12 @@ void fm_app_set_sequence(fm_app_t *app, const fm_seq_pattern_t *pattern) {
   if (!pattern) {
     app->sequence_loaded = 0u;
     fm_seq_stop(&app->sequencer);
+    fm_ui_set_sequence_view(&app->ui, 0, 0u);
     return;
   }
   fm_seq_set_pattern(&app->sequencer, pattern);
   app->sequence_loaded = 1u;
+  fm_ui_set_sequence_view(&app->ui, &app->sequencer.pattern, app->sequencer.step_index);
   if (app->ui.playing) fm_seq_start(&app->sequencer);
 }
 
@@ -120,6 +122,9 @@ void fm_app_tick(fm_app_t *app, const char *preset_name) {
   const uint32_t now = fm1_platform_millis();
   if ((uint32_t)(now - app->last_ui_ms) >= FM1_UI_FRAME_MS) {
     app->last_ui_ms = now;
+    fm_ui_set_sequence_view(&app->ui,
+                            app->sequence_loaded ? &app->sequencer.pattern : 0,
+                            app->sequencer.step_index);
     fm_ui_render(&app->ui, &app->voice.patch, preset_name);
   }
 }
