@@ -1,9 +1,13 @@
 import React, {useEffect,useRef,useState} from 'react';
 import {PATCHES, SEQS, type Patch} from './data';
+import {DEMO_PATCHES, DEMO_SEQUENCES, STUDIO_SCENES, SEQ_ACCENT, SEQ_SLIDE, SEQ_TIE} from './demo';
 import {engine, type EngineMode, type Meter} from './audio/engine';
 import './styles.css';
 
 type Page='OSC'|'MIX'|'FILTER'|'CONTOUR'|'MOD'|'SEQ';
+
+const ALL_PATCHES=[...PATCHES,...DEMO_PATCHES];
+const ALL_SEQS=[...SEQS,...DEMO_SEQUENCES];
 
 function Knob({label,value,min,max,onChange,unit=''}:{label:string,value:number,min:number,max:number,onChange:(v:number)=>void,unit?:string}){
   return <label className="knob">
@@ -75,10 +79,19 @@ function Diagnostics(){
   </div>;
 }
 
+function flagText(flags=0){
+  let text='';
+  if(flags&SEQ_ACCENT)text+='A';
+  if(flags&SEQ_TIE)text+='T';
+  if(flags&SEQ_SLIDE)text+='S';
+  return text||'·';
+}
+
 export default function App(){
-  const [patch,setPatch]=useState(PATCHES[0]);
+  const [patch,setPatch]=useState(ALL_PATCHES[0]);
   const [page,setPage]=useState<Page>('OSC');
-  const [seq,setSeq]=useState(SEQS[0]);
+  const [seq,setSeq]=useState(ALL_SEQS[0]);
+  const [sceneName,setSceneName]=useState(STUDIO_SCENES[0].name);
   const [playing,setPlaying]=useState(false);
   const [activeStep,setActiveStep]=useState(0);
   const [midi,setMidi]=useState('not connected');
@@ -91,6 +104,8 @@ export default function App(){
   const [filterDecaySwitch,setFilterDecaySwitch]=useState(false);
   const [glideMode,setGlideMode]=useState(0);
 
+  const scene=STUDIO_SCENES.find(x=>x.name===sceneName)??STUDIO_SCENES[0];
+
   const update=(k:keyof Patch,v:Patch[keyof Patch])=>{
     const n={...patch,[k]:v} as Patch;
     setPatch(n);engine.applyPatch(n);
@@ -100,7 +115,7 @@ export default function App(){
     setPatch(p);setFilterContour(contour);engine.setFilterContour(contour);engine.applyPatch(p);
   };
   const choosePatchByName=(name:string)=>{
-    const next=PATCHES.find(x=>x.name===name);
+    const next=ALL_PATCHES.find(x=>x.name===name);
     if(!next){console.warn('Unknown FMiniMug1 patch',name);return}
     choosePatch(next);
   };
@@ -115,8 +130,8 @@ export default function App(){
   const toggleAmpDecay=()=>{const next=!ampDecaySwitch;setAmpDecaySwitch(next);engine.setAmpDecaySwitch(next)};
   const toggleFilterDecay=()=>{const next=!filterDecaySwitch;setFilterDecaySwitch(next);engine.setFilterDecaySwitch(next)};
   const changeGlideMode=(value:number)=>{setGlideMode(value);engine.setGlideMode(value)};
-  const play=(n:number)=>engine.noteOn(n,patch);
-  const stop=(n?:number)=>engine.noteOff(n,patch);
+  const play=(n:number)=>{if(n>=0)void engine.noteOn(n,patch)};
+  const stop=(n?:number)=>{if(n===undefined||n>=0)engine.noteOff(n,patch)};
 
   useEffect(()=>{
     const map:Record<string,number>={a:48,w:49,s:50,e:51,d:52,f:53,t:54,g:55,z:56,h:57,u:58,j:59,k:60,o:61,l:62};
@@ -139,10 +154,20 @@ export default function App(){
   };
 
   const chooseSequence=async(name:string)=>{
-    const next=SEQS.find(x=>x.name===name);
+    const next=ALL_SEQS.find(x=>x.name===name);
     if(!next){console.warn('Unknown FMiniMug1 sequence',name);return}
     setSeq(next);setActiveStep(0);
     if(playing)await engine.startSequence(next);
+  };
+
+  const chooseScene=async(name:string)=>{
+    const next=STUDIO_SCENES.find(x=>x.name===name);
+    if(!next)return;
+    const nextPatch=ALL_PATCHES.find(x=>x.name===next.synthA);
+    const nextSeq=ALL_SEQS.find(x=>x.name===next.sequence);
+    setSceneName(name);
+    if(nextPatch)choosePatch(nextPatch);
+    if(nextSeq){setSeq(nextSeq);setActiveStep(0);if(playing)await engine.startSequence(nextSeq)}
   };
 
   const connectMidi=async()=>{
@@ -163,7 +188,7 @@ export default function App(){
     FILTER:<><Knob label="Cutoff" value={patch.cutoff} min={80} max={9000} onChange={v=>update('cutoff',v)} unit="Hz"/><Knob label="Emphasis" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><Knob label="Contour" value={patch.env} min={0} max={7000} onChange={v=>update('env',v)}/><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/></>,
     CONTOUR:<>{contourTarget==='amp'?ampControls:filterControls}</>,
     MOD:<><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)}/><label className="knob rangeControl"><span>NOTE PRIORITY</span><strong>{PRIORITY_LABELS[priority]}</strong><select value={priority} onChange={e=>changePriority(+e.target.value)}>{PRIORITY_LABELS.map((x,i)=><option value={i} key={x}>{x}</option>)}</select><b>low / high / last</b></label><label className="knob rangeControl"><span>ENVELOPE MODE</span><strong>{retrigger?'RETRIGGER':'LEGATO'}</strong><button onClick={toggleRetrigger}>{retrigger?'EVERY NOTE':'SINGLE TRIGGER'}</button><b>classic legato behavior</b></label></>,
-    SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)}><small>{i+1}</small>{n}</button>)}</div>
+    SEQ:<div className="steps">{seq.notes.map((n,i)=>{const tr=seq.transpose?.[i]??0;const f=seq.flags?.[i]??0;return <button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n<0?n:n+tr)} onMouseUp={()=>stop(n<0?undefined:n+tr)}><small>{i+1} · {flagText(f)}</small>{n<0?'REST':n+tr}</button>})}</div>
   };
   const controls=panels[page];
 
@@ -172,13 +197,18 @@ export default function App(){
   const decayLinked=contourTarget==='amp'?ampDecaySwitch:filterDecaySwitch;
 
   return <main>
-    <header><div><h1>FMiniMug1</h1><p>FM-1 · native 3-OSC ladder performance synth</p></div><button onClick={connectMidi}>MIDI · {midi}</button></header>
+    <header><div><h1>FMiniMug1</h1><p>FM-1 · classic core / modern performance expansion</p></div><button onClick={connectMidi}>MIDI · {midi}</button></header>
+    <section className="sceneBar">
+      <div><span>2.0 DEMO SCENE</span><select value={scene.name} onChange={e=>void chooseScene(e.target.value)}>{STUDIO_SCENES.map(s=><option value={s.name} key={s.name}>{s.name} · {s.style}</option>)}</select></div>
+      <strong>{scene.description}</strong>
+      <div className="sceneGrid"><span><b>A</b> {scene.synthA}</span><span><b>B NEXT</b> {scene.synthB}</span><span><b>DRUM NEXT</b> {scene.drums}</span><span><b>FX NEXT</b> {scene.fx.delay} / {scene.fx.reverb}</span><span><b>CHAR</b> {scene.fx.character}</span><span><b>MACROS</b> {scene.macros.join(' · ')}</span></div>
+    </section>
     <section className="panel">
-      <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatchByName(e.target.value)}>{PATCHES.map(p=><option key={p.name} value={p.name}>{p.name} · {p.category}</option>)}</select></div>
+      <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatchByName(e.target.value)}>{ALL_PATCHES.map(p=><option key={p.name} value={p.name}>{p.name} · {p.category}</option>)}</select></div>
       <nav>{PAGES.map(x=><button key={x} className={page===x?'active':''} onClick={()=>setPage(x)}>{x}</button>)}</nav>
-      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]} · GLIDE ${GLIDE_LABELS[glideMode]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} · ${decayLinked?'DECAY LINK':'FREE RELEASE'}`:page==='MOD'?`${PRIORITY_LABELS[priority]} PRIORITY · ${retrigger?'RETRIGGER':'SINGLE TRIGGER'}`:'4 ENCODERS · HOLD = SECONDARY · PRESS = FOCUS'}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
+      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]} · GLIDE ${GLIDE_LABELS[glideMode]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} · ${decayLinked?'DECAY LINK':'FREE RELEASE'}`:page==='MOD'?`${PRIORITY_LABELS[priority]} PRIORITY · ${retrigger?'RETRIGGER':'SINGLE TRIGGER'}`:`${seq.notes.length} STEPS · ${seq.swing??0}% SWING`}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
       <Diagnostics/>
-      <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{SEQS.map(s=><option key={s.name} value={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · native sample-clock transport · Keyboard: A W S E D F T G Z H U J K O L</span></div>
+      <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{ALL_SEQS.map(s=><option key={s.name} value={s.name}>{s.name} · {s.bpm} BPM{s.swing?` · ${s.swing}% swing`:''}</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{ALL_PATCHES.length} patches · {ALL_SEQS.length} sequences · {STUDIO_SCENES.length} demo scenes · A/T/S native step flags</span></div>
       <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)} onMouseLeave={()=>stop(n)}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
     </section>
     <footer>Original FMiniMug1 UI and sound bank · native DSP and sequencer shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
