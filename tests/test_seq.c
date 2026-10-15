@@ -82,6 +82,28 @@ int main(void) {
   assert(first_boundary == 7500);
   assert(second_boundary == 12000);
 
+  /* A tied step sustains through its own gate, but a following rest releases
+   * the held note exactly on the rest boundary rather than hanging forever. */
+  memset(&p, 0, sizeof(p));
+  p.length = 2;
+  p.bpm = 120;
+  p.steps[0].note = 60;
+  p.steps[0].velocity = 100;
+  p.steps[0].gate_percent = 25;
+  p.steps[0].flags = FM_SEQ_FLAG_TIE | FM_SEQ_FLAG_SLIDE;
+  p.steps[1].note = -1;
+  p.steps[1].velocity = 100;
+  p.steps[1].gate_percent = 70;
+  fm_seq_set_pattern(&seq, &p);
+  fm_seq_start(&seq);
+  memset(&log, 0, sizeof(log));
+  fm_seq_process(&seq, 6001, capture, &log);
+  int tied_off = -1;
+  for (int i = 0; i < log.count; ++i) {
+    if (log.events[i].type == FM_SEQ_EVENT_NOTE_OFF) tied_off = (int)log.events[i].frame_offset;
+  }
+  assert(tied_off == 6000);
+
   printf("FMiniMug1 sequencer tests passed\n");
   return 0;
 }
