@@ -16,6 +16,12 @@ typedef enum {
   FM_RANGE_2
 } fm_osc_range_t;
 
+typedef enum {
+  FM_NOTE_LOW = 0,
+  FM_NOTE_HIGH,
+  FM_NOTE_LAST
+} fm_note_priority_t;
+
 typedef struct {
   fm_wave_t wave;
   float level;
@@ -53,8 +59,10 @@ typedef struct {
   uint8_t filter_keytrack;
   /* Oversample the oscillator/mixer/ladder path two times. */
   uint8_t oversample_2x;
-  /* 0 = legato does not restart contours, 1 = every note-on retriggers. */
+  /* 0 = legato does not restart contours, 1 = every selected note retriggers. */
   uint8_t retrigger;
+  /* FM_NOTE_LOW / FM_NOTE_HIGH / FM_NOTE_LAST. */
+  uint8_t note_priority;
 } fm_patch_t;
 
 typedef struct {
@@ -71,11 +79,15 @@ typedef struct {
   float gate;
   float velocity;
   uint8_t current_note;
+  uint64_t held_notes[2];
+  uint16_t held_order[128];
+  uint16_t note_serial;
   uint32_t rng;
 } fm_voice_t;
 
 void fm_voice_init(fm_voice_t *v, float sample_rate);
 void fm_voice_set_patch(fm_voice_t *v, const fm_patch_t *patch);
 void fm_voice_note_on(fm_voice_t *v, uint8_t midi_note, uint8_t velocity);
+void fm_voice_note_off_note(fm_voice_t *v, uint8_t midi_note);
 void fm_voice_note_off(fm_voice_t *v);
 float fm_voice_process(fm_voice_t *v);
