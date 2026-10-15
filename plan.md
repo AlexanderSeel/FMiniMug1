@@ -18,6 +18,8 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Resonant 4-pole low-pass fallback approximation.
 - [x] Independent filter and loudness contours in the canonical native/WASM engine.
 - [x] Glide/legato behavior.
+- [x] Selectable constant-time / constant-rate glide in native/WASM engine and controller.
+- [x] Classic decay-linked release switches for loudness and filter contours.
 - [x] Low/high/last monophonic note priority with held-key fallback.
 - [x] On-screen keyboard and PC keyboard performance with note-specific release.
 - [x] Factory patch browser.
@@ -45,13 +47,16 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] HOLD oscillator range selectors (32'/16'/8'/4'/2').
 - [x] HOLD filter contour editing independent from loudness contour.
 - [x] HOLD note-priority and retrigger controls on MOD.
+- [x] HOLD+OSC encoder-4 press switches glide TIME/RATE.
+- [x] HOLD+CONTOUR encoder presses switch filter/loudness decay-linked release.
 - [x] Host UI interaction tests with fake FM-1 platform.
 - [x] Add compact live cutoff/resonance response graph to FILTER.
-- [x] Add compact loudness/filter ADSR contour graph to CONTOUR.
+- [x] Add compact loudness/filter ADSR contour graph to CONTOUR including linked-release visualization.
 - [x] Generate browser/C parameter IDs from one shared manifest so mappings cannot drift.
 - [x] Implement Felucca-compatible display/input/time/audio/LED adapter behind `fm1_platform.h`.
 - [x] Add raw 27-key / 14-button / 7-encoder hardware diagnostic screen.
 - [x] Add compile-time semantic control-map gate so normal synth mode cannot use assumed raw IDs.
+- [x] Add host behavior tests for raw/mapped Felucca input, LEDs, ALNK rendering, timing budget and disabled flash writes.
 - [ ] Add 16-step viewport and scrolling 64-step patterns to SEQ/PERF.
 - [ ] Complete HOLD shortcuts for oscillator waveform assignment and remaining performance actions.
 - [ ] Verify physical encoder/button IDs on a real FM-1 diagnostic screen.
@@ -70,16 +75,16 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [ ] Calibrate self-oscillation pitch/amplitude near maximum emphasis.
 - [x] Filter keyboard tracking off / 1⁄3 / 2⁄3 / full variants.
 - [x] Separate filter and loudness ADSR parameter sets and explicit envelope stages.
-- [ ] Add classic decay/release switch behavior on top of the separate contours.
+- [x] Add classic decay-linked release switches on top of the separate contours.
 - [x] Single-trigger legato vs selected-note retrigger mode.
 - [x] Low/high/last held-note priority modes with fallback when the active key is released.
-- [ ] Glide constant-time/constant-rate options.
+- [x] Glide constant-time/constant-rate options without adding real-time libm calls.
 - [x] Deterministic analog drift foundation.
 - [ ] Extend analog model with component spread, calibration error and filter asymmetry.
 - [x] Remove direct `libm` dependency from the real-time DSP path.
 - [x] Link the float DSP against the actual pi32v2 `libcompiler-rt.a` soft-float runtime.
 - [x] Host finite/bounded-output stress tests.
-- [x] Host octave-range, dual-contour, retrigger, ADSR-stage and held-note-priority tests.
+- [x] Host octave-range, dual-contour, retrigger, ADSR-stage, decay-switch, glide-mode and held-note-priority tests.
 - [ ] CPU budget and golden render tests.
 
 ## Milestone 4 — Presets and sequences 🚧
@@ -97,7 +102,8 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 
 ## Milestone 5 — MIDI / controller protocol
 - [x] Reserve manufacturer-neutral SysEx development namespace format in web layer.
-- [x] Append-only generated parameter protocol through v3; existing IDs 0–22 remain stable.
+- [x] Append-only generated parameter protocol through v4; existing IDs 0–31 remain stable.
+- [x] Add protocol IDs for loudness/filter decay switches and glide mode.
 - [ ] Finalize controller protocol only after native MIDI/SysEx parser exists.
 - [ ] Full patch dump/request.
 - [ ] Parameter delta updates over hardware MIDI.
@@ -126,6 +132,7 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Run the native portable sequencer in that same AudioWorklet/sample clock.
 - [x] Route overlapping keyboard note-on/note-off events into the native held-note priority engine.
 - [x] Expose classic oscillator ranges, dual contours, retrigger and note priority in the controller.
+- [x] Expose decay-linked release switches and TIME/RATE glide in the controller.
 - [x] Keep a clearly indicated Web Audio/timer fallback for unsupported/development environments.
 - [x] CI builds and verifies the generated WASM/worklet assets.
 - [ ] Compile the native 240×240 UI renderer to WASM/canvas for pixel-identical hardware preview.
@@ -139,6 +146,7 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Host DSP stability tests.
 - [x] Host sequencer timing/swing/tie tests.
 - [x] Host UI interaction/mapping tests.
+- [x] Host Felucca platform-adapter behavior tests.
 - [x] Compile-check browser native-DSP/sequencer ABI in CI.
 - [x] CI verifies generated browser/native parameter protocol files are synchronized.
 - [x] Production web + WASM build in CI.
@@ -157,9 +165,11 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 
 Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca 1.6.1).
 
-- Diagnostic image: 4,984 bytes, `_start=0x02000120`, BSS `0x01C08000..0x01C08C38`, raw control map, flash writes disabled.
-- Full synth link check: 16,656 bytes, `_start=0x02000120`, BSS `0x01C08000..0x01C09004`, pi32v2 `libcompiler-rt.a`, synthetic control map, flash writes disabled.
-- Both target images are CI verification artifacts only. They are **not declared safe to flash** and are not packaged as `.fwsc`.
+- Diagnostic image: `_start=0x02000120`, raw control map, flash writes disabled.
+- Audio-check image: autonomous ALNK/DSP timing diagnostic, flash writes disabled.
+- Full synth link check: `_start=0x02000120`, pi32v2 `libcompiler-rt.a`, synthetic control map, flash writes disabled.
+- Target CI verifies XIP/image bounds, BSS, entry stub, SHA-256 manifests, absence of chip-ROM references and absence of `.fwsc` output.
+- All target images are CI verification artifacts only. They are **not declared safe to flash** and are not packaged as `.fwsc`.
 
 ## FM-1 control concept
 
@@ -172,8 +182,8 @@ Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca
 - Preset: factory/user patch selection.
 
 ### HOLD layer
-- OSC: encoder 1–3 select 32'/16'/8'/4'/2'; encoder 4 fine-adjusts glide.
-- CONTOUR: encoder 1–4 edit the filter contour while the normal layer edits loudness contour.
+- OSC: encoder 1–3 select 32'/16'/8'/4'/2'; encoder 4 rotates glide amount and press switches TIME/RATE mode.
+- CONTOUR: encoder 1–4 edit the filter contour while the normal layer edits loudness contour; HOLD+encoder 2 press toggles filter decay-link, HOLD+encoder 3 press toggles loudness decay-link.
 - MOD: encoder 1 chooses LOW/HIGH/LAST note priority; encoder 4 switches single-trigger/retrigger.
 - Future Hold + keyboard: instant waveform assignments and performance macros.
 - Future Hold + Play: tap tempo / clock source.
