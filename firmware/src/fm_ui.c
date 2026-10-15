@@ -172,7 +172,12 @@ static void adjust_patch(fm_ui_state_t *ui, fm_patch_t *p, int enc, int delta) {
         if (bpm > 300) bpm = 300;
         ui->tempo_bpm = (uint16_t)bpm;
       }
-      if (enc == 1) ui->pattern_index = (uint8_t)(ui->pattern_index + delta);
+      if (enc == 1 && !ui->playing) {
+        int page = (int)ui->seq_window + (delta > 0 ? 1 : -1);
+        if (page < 0) page = 0;
+        if (page > 3) page = 3;
+        ui->seq_window = (uint8_t)page;
+      }
       if (enc == 2) ui->preset_index = (uint8_t)(ui->preset_index + delta);
       break;
     default: break;
@@ -254,11 +259,73 @@ static void draw_contour_graph(const fm_patch_t *p, int filter) {
   fm1_platform_lcd_text(10, 184, filter ? "FILTER CONTOUR / HOLD" : "LOUDNESS CONTOUR", COL_DIM);
 }
 
+static void draw_seq_grid(const fm_ui_state_t *ui) {
+  char step_text[8];
+  char header[28];
+  const unsigned first = (unsigned)ui->seq_window * 16u;
+  fmt_buf_t b = {header, header + sizeof(header)};
+  fmt_text_put(&b, "STEPS ");
+  fmt_uint_put(&b, first + 1u, 2u);
+  fmt_put(&b, '-');
+  fmt_uint_put(&b, first + 16u, 2u);
+  fmt_text_put(&b, " / ");
+  fmt_uint_put(&b, ui->seq_length ? ui->seq_length : 1u, 2u);
+  fmt_done(&b);
+  fm1_platform_lcd_text(8, 151, header, COL_DIM);
+
+  for (int i = 0; i < 16; ++i) {
+    const int row = i / 8;
+    const int col = i % 8;
+    const int x = 8 + col * 28;
+    const int y = 169 + row * 31;
+    const unsigned absolute = first + (unsigned)i;
+    const int valid = absolute < ui->seq_length;
+    const int active = ui->playing && absolute == ui->seq_step;
+    const uint8_t flags = ui->seq_flags[i];
+    const uint16_t border = active ? COL_RED : (flags & FM_SEQ_FLAG_ACCENT ? COL_ACCENT : COL_PANEL);
+    fm1_platform_lcd_rect(x, y, 25, 27, border);
+    if (!valid || ui->seq_notes[i] < 0) fmt_text(step_text, sizeof(step_text), "--");
+    else fmt_int(step_text, sizeof(step_text), ui->seq_notes[i], 0, "");
+    fm1_platform_lcd_text(x + 4, y + 4, step_text, active ? COL_RED : COL_TEXT);
+    if (flags & FM_SEQ_FLAG_TIE) fm1_platform_lcd_text(x + 3, y + 16, "T", COL_ACCENT);
+    else if (flags & FM_SEQ_FLAG_SLIDE) fm1_platform_lcd_text(x + 3, y + 16, "S", COL_ACCENT);
+    else if (flags & FM_SEQ_FLAG_ACCENT) fm1_platform_lcd_text(x + 3, y + 16, "A", COL_ACCENT);
+  }
+}
+
 void fm_ui_init(fm_ui_state_t *ui) {
   memset(ui, 0, sizeof(*ui));
   ui->page = FM_UI_OSC;
   ui->focus_encoder = -1;
   ui->tempo_bpm = 120;
+  ui->seq_length = 16u;
+  for (int i = 0; i < 16; ++i) ui->seq_notes[i] = -1;
+}
+
+void fm_ui_set_sequence_view(fm_ui_state_t *ui, const fm_seq_pattern_t *pattern, uint8_t current_step) {
+  if (!ui) return;
+  if (!pattern || pattern->length == 0u) {
+    ui->seq_length = 0u;
+    ui->seq_step = 0u;
+    for (int i = 0; i < 16; ++i) { ui->seq_notes[i] = -1; ui->seq_flags[i] = 0u; }
+    return;
+  }
+  ui->seq_length = pattern->length > FM_SEQ_MAX_STEPS ? FM_SEQ_MAX_STEPS : pattern->length;
+  if (current_step >= ui->seq_length) current_step = 0u;
+  ui->seq_step = current_step;
+  if (ui->playing) ui->seq_window = (uint8_t)(current_step / 16u);
+  if (ui->seq_window > 3u) ui->seq_window = 3u;
+  const unsigned first = (unsigned)ui->seq_window * 16u;
+  for (int i = 0; i < 16; ++i) {
+    const unsigned index = first + (unsigned)i;
+    if (index < ui->seq_length) {
+      ui->seq_notes[i] = pattern->steps[index].note;
+      ui->seq_flags[i] = pattern->steps[index].flags;
+    } else {
+      ui->seq_notes[i] = -1;
+      ui->seq_flags[i] = 0u;
+    }
+  }
 }
 
 void fm_ui_handle_input(fm_ui_state_t *ui, fm_patch_t *patch, const fm1_input_frame_t *input) {
@@ -346,9 +413,9 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
       break;
     case FM_UI_SEQ:
     default:
-      label[0] = "TEMPO"; label[1] = "PATTERN"; label[2] = "PRESET"; label[3] = "TRANSPORT";
+      label[0] = "TEMPO"; label[1] = "WINDOW"; label[2] = "PRESET"; label[3] = "TRANSPORT";
       fmt_uint(value[0], sizeof(value[0]), ui->tempo_bpm, 1u, " BPM");
-      fmt_uint(value[1], sizeof(value[1]), ui->pattern_index + 1u, 2u, "");
+      fmt_uint(value[1], sizeof(value[1]), ui->seq_window + 1u, 1u, "/4");
       fmt_uint(value[2], sizeof(value[2]), ui->preset_index + 1u, 2u, "");
       fmt_text(value[3], sizeof(value[3]), ui->playing ? "PLAY" : "STOP");
       break;
@@ -375,9 +442,9 @@ void fm_ui_render(const fm_ui_state_t *ui, const fm_patch_t *p, const char *pres
       fm1_platform_lcd_text(8, 204, p->filter_decay_switch ? "F DECAY ON" : "F DECAY OFF", p->filter_decay_switch ? COL_ACCENT : COL_DIM);
       fm1_platform_lcd_text(122, 204, p->amp_decay_switch ? "A DECAY ON" : "A DECAY OFF", p->amp_decay_switch ? COL_ACCENT : COL_DIM);
       fm1_platform_lcd_text(8, 220, "HOLD+E2 F / HOLD+E3 A", COL_DIM);
-    } else if (ui->page == FM_UI_OSC && ui->hold) {
-      fm1_platform_lcd_text(8, 180, "ENC4 TURN=AMOUNT PRESS=MODE", COL_TEXT);
-    } else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / SECONDARY" : "PRESS ENCODER = FOCUS", COL_TEXT);
+    } else if (ui->page == FM_UI_SEQ) draw_seq_grid(ui);
+    else if (ui->page == FM_UI_OSC && ui->hold) fm1_platform_lcd_text(8, 180, "ENC4 TURN=AMOUNT PRESS=MODE", COL_TEXT);
+    else fm1_platform_lcd_text(8, 180, ui->hold ? "HOLD / SECONDARY" : "PRESS ENCODER = FOCUS", COL_TEXT);
   }
 
   if (ui->playing) fm1_platform_lcd_rect(215, 8, 16, 8, COL_RED);
