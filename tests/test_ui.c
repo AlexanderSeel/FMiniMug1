@@ -89,6 +89,20 @@ int main(void) {
   assert(patch.attack_s == amp_attack);
   assert(patch.filter_attack_s > filter_attack);
 
+  /* MOD HOLD exposes note-priority on encoder 1 and retrigger on encoder 4. */
+  memset(&input, 0, sizeof(input));
+  input.button_pressed = bit(FM1_KEY_PAGE_RIGHT);
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(ui.page == FM_UI_MOD);
+  assert(patch.note_priority == FM_NOTE_LOW);
+  memset(&input, 0, sizeof(input));
+  input.buttons = bit(FM1_KEY_HOLD);
+  input.encoder_delta[0] = 1;
+  input.encoder_delta[3] = 1;
+  fm_ui_handle_input(&ui, &patch, &input);
+  assert(patch.note_priority == FM_NOTE_HIGH);
+  assert(patch.retrigger == 1u);
+
   fm_ui_render(&ui, &patch, "TEST PATCH");
   assert(present_count == 1);
 
