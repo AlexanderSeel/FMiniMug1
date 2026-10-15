@@ -17,6 +17,9 @@ void fm1_felucca_set_audio_renderer(fm1_felucca_audio_renderer_t renderer, void 
 void fm1_felucca_audio_start(void);
 void fm1_felucca_audio_stop(void);
 
+/* Exact rate implied by Felucca's 24 MHz / 544 ALNK clocking. */
+float fmm_felucca_sample_rate(void);
+
 /* Felucca's assembly IRQ wrapper calls this symbol. */
 void fm1_alnk0_irq(void);
 
