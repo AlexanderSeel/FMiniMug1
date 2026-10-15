@@ -42,7 +42,7 @@ jobs:
           JIELI_TOOLCHAIN: /tmp/jieli/toolchain
         run: python3 scripts/build_felucca_diag.py --audio-check
 
-      - name: Build full synth link check with synthetic control map
+      - name: Build full Studio synth link check with synthetic control map
         env:
           FELUCCA_SRC: /tmp/felucca
           JIELI_TOOLCHAIN: /tmp/jieli/toolchain
@@ -78,11 +78,32 @@ jobs:
           grep -q '^installable=no$' build/felucca-target/SYNTH-CHECK-INFO.txt
           grep -q '^flash_write_api=disabled$' build/felucca-target/SYNTH-CHECK-INFO.txt
           grep -q '^control_map=synthetic-not-for-hardware$' build/felucca-target/SYNTH-CHECK-INFO.txt
+          grep -q '^studio_beta=yes$' build/felucca-target/SYNTH-CHECK-INFO.txt
 
           if find build/felucca-target -type f -name '*.fwsc' | grep -q .; then
             echo 'safety failure: target link check generated an install package' >&2
             exit 1
           fi
+
+      - name: Write hardware beta warning
+        run: |
+          cat > build/felucca-target/HARDWARE-BETA-WARNING.txt <<'EOF'
+          FMiniMug1 HARDWARE BETA / DIAGNOSTIC ARTIFACTS
+          =================================================
+          These files are NOT installable firmware packages.
+          They are NOT declared safe to flash.
+          Flash writes inside FMiniMug1 remain disabled.
+          The synth-check binary uses SYNTHETIC control IDs and must NOT be
+          treated as the real FM-1 button/encoder map.
+
+          Test order:
+          1. raw fminimug1-diag.bin: capture real control IDs
+          2. fminimug1-audio-check.bin: verify OVER stays 0 and listen for clicks
+          3. rebuild mapped Studio runtime with the captured IDs
+          4. only then test full synth on a physical unit
+
+          No .fwsc is intentionally produced.
+          EOF
 
       - name: Print target build summaries
         run: |
@@ -91,3 +112,26 @@ jobs:
           cat build/felucca-target/AUDIO-CHECK-INFO.txt
           echo '---'
           cat build/felucca-target/SYNTH-CHECK-INFO.txt
+
+      - name: Upload non-installable FM-1 hardware beta diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: FMiniMug1-hardware-beta-NON-INSTALLABLE
+          path: |
+            build/felucca-target/fminimug1-diag.bin
+            build/felucca-target/fminimug1-diag.elf
+            build/felucca-target/fminimug1-diag.dis
+            build/felucca-target/fminimug1-audio-check.bin
+            build/felucca-target/fminimug1-audio-check.elf
+            build/felucca-target/fminimug1-audio-check.dis
+            build/felucca-target/fminimug1-synth-check.bin
+            build/felucca-target/fminimug1-synth-check.elf
+            build/felucca-target/fminimug1-synth-check.dis
+            build/felucca-target/BUILD-INFO.txt
+            build/felucca-target/AUDIO-CHECK-INFO.txt
+            build/felucca-target/SYNTH-CHECK-INFO.txt
+            build/felucca-target/SHA256SUMS
+            build/felucca-target/AUDIO-CHECK-SHA256SUMS
+            build/felucca-target/SYNTH-CHECK-SHA256SUMS
+            build/felucca-target/HARDWARE-BETA-WARNING.txt
+          retention-days: 14
