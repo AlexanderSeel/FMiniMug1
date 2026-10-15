@@ -23,6 +23,8 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Sequence browser + step playback.
 - [x] Native `fm_voice.c` DSP compiled to WebAssembly.
 - [x] AudioWorklet renders the native oscillator/mixer/ladder engine in 128-sample blocks.
+- [x] Native `fm_seq.c` sequencer runs on the audio sample clock in WASM mode instead of JavaScript timers.
+- [x] Browser step grid and DSP monitor follow the native current sequence step.
 - [x] Web Audio remains only as a graceful fallback if WASM/AudioWorklet is unavailable.
 - [x] Oscilloscope + spectrum + peak/RMS diagnostics with active-engine indicator.
 - [ ] Golden-render audio regression tests for every factory patch.
@@ -71,6 +73,9 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 ## Milestone 4 — Presets and sequences 🚧
 - [x] 32 original factory patches across bass, lead, brass, keys, sequences, SFX, drones and percussion.
 - [x] 12 demonstration/performance sequences.
+- [x] Portable 1–64 step sample-clock sequencer core.
+- [x] Per-step gate, velocity, transpose and accent/tie/slide flags in the native sequence model.
+- [x] Pair-preserving swing timing and tie-to-rest release behavior.
 - [ ] Expand to 64+ original factory presets.
 - [ ] Expand to 32+ sequences: Berlin, funk, prog, electro, soundtrack, educational oscillator/filter demos.
 - [ ] User preset slots in flash.
@@ -103,7 +108,8 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 ## Milestone 7 — Browser emulator parity 🚧
 - [x] Compile the native DSP core to WASM as the canonical browser sound engine.
 - [x] Run the WASM engine inside an AudioWorklet instead of the UI thread.
-- [x] Keep a clearly indicated Web Audio fallback for unsupported/development environments.
+- [x] Run the native portable sequencer in that same AudioWorklet/sample clock.
+- [x] Keep a clearly indicated Web Audio/timer fallback for unsupported/development environments.
 - [x] CI builds and verifies the generated WASM/worklet assets.
 - [ ] Compile the native 240×240 UI renderer to WASM/canvas for pixel-identical hardware preview.
 - [ ] Persist presets/sequences/settings in IndexedDB/local storage.
@@ -114,8 +120,9 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 
 ## Milestone 8 — QA / release 🚧
 - [x] Host DSP stability tests.
+- [x] Host sequencer timing/swing/tie tests.
 - [x] Host UI interaction/mapping tests.
-- [x] Compile-check browser native-DSP ABI in CI.
+- [x] Compile-check browser native-DSP/sequencer ABI in CI.
 - [x] CI verifies generated browser/native parameter protocol files are synchronized.
 - [x] Production web + WASM build in CI.
 - [ ] Golden audio render regression suite.
