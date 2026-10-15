@@ -1,4 +1,4 @@
-import {PATCHES, type Patch, type Wave} from '../data';
+import {PATCHES, type Patch, type Sequence, type Wave} from '../data';
 import {PARAM} from '../generated/params';
 
 const midiToHz=(n:number)=>440*Math.pow(2,(n-69)/12);
@@ -49,7 +49,7 @@ class WebAudioFallback {
 }
 
 export type EngineMode='idle'|'native-wasm'|'web-audio-fallback';
-export type Meter={peak:number;rms:number};
+export type Meter={peak:number;rms:number;step?:number};
 
 export class MiniEngine {
   ctx:AudioContext|null=null;
@@ -62,6 +62,9 @@ export class MiniEngine {
   private starting:Promise<void>|null=null;
   private modeListeners=new Set<(m:EngineMode)=>void>();
   private meterListeners=new Set<(m:Meter)=>void>();
+  private fallbackTimer:number|undefined;
+  private fallbackGateTimer:number|undefined;
+  private fallbackStep=0;
 
   onMode(cb:(m:EngineMode)=>void){this.modeListeners.add(cb);cb(this.mode);return()=>this.modeListeners.delete(cb)}
   onMeter(cb:(m:Meter)=>void){this.meterListeners.add(cb);return()=>this.meterListeners.delete(cb)}
@@ -88,7 +91,7 @@ export class MiniEngine {
         const node=new AudioWorkletNode(this.ctx,'fminimug1-dsp',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{wasmBytes:bytes}});
         node.connect(this.analyser);
         node.port.onmessage=e=>{
-          if(e.data?.type==='meter')for(const cb of this.meterListeners)cb({peak:e.data.peak,rms:e.data.rms});
+          if(e.data?.type==='meter')for(const cb of this.meterListeners)cb({peak:e.data.peak,rms:e.data.rms,step:e.data.step});
           if(e.data?.type==='error')console.warn('FMiniMug1 DSP worklet:',e.data.message);
         };
         this.node=node;this.applyPatch(this.patch);this.setMode('native-wasm');
@@ -113,6 +116,34 @@ export class MiniEngine {
   applyPatch(p:Patch){this.patch=p;if(this.node)this.node.port.postMessage({type:'params',values:this.patchValues(p)})}
   async noteOn(note:number,p=this.patch){await this.start();this.applyPatch(p);if(this.node)this.node.port.postMessage({type:'noteOn',note,velocity:112});else this.fallback?.noteOn(note,p)}
   noteOff(p=this.patch){if(this.node)this.node.port.postMessage({type:'noteOff'});else this.fallback?.stop(p)}
+
+  async startSequence(seq:Sequence){
+    await this.start();
+    this.stopSequence();
+    this.applyPatch(this.patch);
+    if(this.node){
+      this.node.port.postMessage({type:'sequence',bpm:seq.bpm,swing:0,notes:seq.notes,gates:seq.gates});
+      this.node.port.postMessage({type:'seqStart'});
+      return;
+    }
+    this.fallbackStep=0;
+    const tick=()=>{
+      const i=this.fallbackStep++%seq.notes.length;
+      const note=seq.notes[i];
+      this.fallback?.noteOn(note,this.patch);
+      if(this.fallbackGateTimer!==undefined)clearTimeout(this.fallbackGateTimer);
+      this.fallbackGateTimer=window.setTimeout(()=>this.fallback?.stop(this.patch),60000/seq.bpm*seq.gates[i]);
+    };
+    tick();
+    this.fallbackTimer=window.setInterval(tick,60000/seq.bpm);
+  }
+
+  stopSequence(){
+    if(this.node)this.node.port.postMessage({type:'seqStop'});
+    if(this.fallbackTimer!==undefined){clearInterval(this.fallbackTimer);this.fallbackTimer=undefined}
+    if(this.fallbackGateTimer!==undefined){clearTimeout(this.fallbackGateTimer);this.fallbackGateTimer=undefined}
+    this.fallback?.stop(this.patch);
+  }
 }
 
 export const engine=new MiniEngine();
