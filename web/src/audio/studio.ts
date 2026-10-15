@@ -31,8 +31,7 @@ class AuxMiniVoice{
     filter.frequency.setValueAtTime(Math.max(70,p.cutoff*.65),now);
     filter.frequency.exponentialRampToValueAtTime(Math.max(80,Math.min(15000,p.cutoff+p.env)),now+p.attack+.008);
     filter.frequency.exponentialRampToValueAtTime(Math.max(80,p.cutoff+p.env*p.sustain),now+p.attack+p.decay+.015);
-    const drive=c.createWaveShaper();
-    const curve=new Float32Array(512);
+    const drive=c.createWaveShaper();const curve=new Float32Array(512);
     for(let i=0;i<curve.length;i++){const x=i/255.5-1;curve[i]=Math.tanh(x*Math.max(1,p.drive))}
     drive.curve=curve;drive.oversample='2x';filter.connect(drive);drive.connect(this.destination);
     for(let i=0;i<3;i++){
@@ -96,15 +95,25 @@ export class StudioEngine{
 
   configure(patchB:Patch,drums:DrumPatternLike,fx:SceneFxLike):StudioMix{
     this.patchB=clonePatch(patchB);this.drumPattern=drums;
-    const d=fx.delay.toLowerCase(),r=fx.reverb.toLowerCase();
-    const delayWet=d==='off'?0:d.includes('dub')?.34:0;
-    const resolvedDelay=d==='off'?0:(d.includes('dub')?.34:0);
-    void delayWet;void resolvedDelay;
-    const delayValue=d==='off'?0:(d.includes('dub') ? .34 : d.includes('ping') ? .30 : d.includes('multi') ? .28 : d.includes('bbd') ? .25 : .22);
-    const reverbValue=r==='off'?0:(r.includes('dark space') ? .36 : r.includes('hall') ? .30 : r.includes('plate') ? .24 : r.includes('spring') ? .20 : .16);
+    const d=fx.delay.toLowerCase();
+    const r=fx.reverb.toLowerCase();
+    let delayValue=.22;
+    if(d==='off')delayValue=0;
+    else if(d.includes('dub'))delayValue=.34;
+    else if(d.includes('ping'))delayValue=.30;
+    else if(d.includes('multi'))delayValue=.28;
+    else if(d.includes('bbd'))delayValue=.25;
+    let reverbValue=.16;
+    if(r==='off')reverbValue=0;
+    else if(r.includes('dark space'))reverbValue=.36;
+    else if(r.includes('hall'))reverbValue=.30;
+    else if(r.includes('plate'))reverbValue=.24;
+    else if(r.includes('spring'))reverbValue=.20;
     this.mix={layer:this.mix.layer,drums:this.mix.drums,delay:delayValue,reverb:reverbValue,character:fx.character};
-    this.delaySeconds=60/(drums.bpm||120)*(d.includes('slap') ? .25 : d.includes('1/4') ? .75 : .375);
-    this.delayFeedbackAmount=d.includes('dub') ? .62 : d.includes('tape') ? .5 : .42;
+    this.delaySeconds=60/(drums.bpm||120)*(d.includes('slap')?.25:0);
+    if(!d.includes('slap'))this.delaySeconds=60/(drums.bpm||120)*(d.includes('1/4')?.75:.375);
+    this.delayFeedbackAmount=d.includes('dub')?.62:0;
+    if(!d.includes('dub'))this.delayFeedbackAmount=d.includes('tape')?.5:.42;
     this.reverbSeconds=r.includes('dark space')?4.4:r.includes('hall')?3.2:r.includes('plate')?2.4:r.includes('spring')?1.6:2.0;
     if(this.reverb&&this.ctx)this.reverb.buffer=this.makeImpulse(this.reverbSeconds,.78);
     this.applyMix();return {...this.mix};
@@ -141,12 +150,7 @@ export class StudioEngine{
     if(this.reverbWet)this.reverbWet.gain.value=this.mix.reverb;
     if(this.delay)this.delay.delayTime.value=this.delaySeconds;
     if(this.delayFeedback)this.delayFeedback.gain.value=this.delayFeedbackAmount;
-    if(this.character){
-      const k={Clean:.72,Classic:1.25,Aged:1.7,Hot:2.7,Broken:4.2}[this.mix.character];
-      const curve=new Float32Array(1024),norm=Math.tanh(k);
-      for(let i=0;i<curve.length;i++){const x=i/511.5-1;curve[i]=Math.tanh(x*k)/norm}
-      this.character.curve=curve;this.character.oversample='2x';
-    }
+    if(this.character){const k={Clean:.72,Classic:1.25,Aged:1.7,Hot:2.7,Broken:4.2}[this.mix.character];const curve=new Float32Array(1024),norm=Math.tanh(k);for(let i=0;i<curve.length;i++){const x=i/511.5-1;curve[i]=Math.tanh(x*k)/norm}this.character.curve=curve;this.character.oversample='2x'}
   }
   private makeImpulse(seconds:number,decay:number){const c=this.ctx!,rate=c.sampleRate,len=Math.floor(rate*seconds),buf=c.createBuffer(2,len,rate);for(let ch=0;ch<2;ch++){const data=buf.getChannelData(ch);for(let i=0;i<len;i++){const t=i/len;data[i]=(Math.random()*2-1)*Math.pow(1-t,2+decay*5)}}return buf}
   private noiseBuffer(){if(this.noise)return this.noise;const c=this.ctx!,len=Math.floor(c.sampleRate*.5),b=c.createBuffer(1,len,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.noise=b;return b}
