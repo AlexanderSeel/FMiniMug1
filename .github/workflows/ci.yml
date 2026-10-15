@@ -15,17 +15,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install Emscripten
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y emscripten
       - run: npm install
-      - run: npm run build
+      - name: Build native WASM + web app
+        run: npm run build
+      - name: Verify native DSP web artifacts
+        run: |
+          test -s public/dsp/fminimug1.wasm
+          test -s public/dsp/fminimug1-worklet.js
+          test -s dist/dsp/fminimug1.wasm
+          test -s dist/dsp/fminimug1-worklet.js
 
   portable-native:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Compile portable DSP and UI
+      - name: Compile portable DSP, browser ABI and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
       - name: Run DSP stability tests
         run: |
