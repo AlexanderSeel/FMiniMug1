@@ -13,12 +13,23 @@ function Knob({label,value,min,max,onChange,unit=''}:{label:string,value:number,
 
 const RANGE_LABELS=["32'","16'","8'","4'","2'"];
 const PRIORITY_LABELS=['LOW','HIGH','LAST'];
+const GLIDE_LABELS=['TIME','RATE'];
+
 function RangeControl({label,value,onChange}:{label:string,value:number,onChange:(v:number)=>void}){
   return <label className="knob rangeControl">
     <span>{label} RANGE</span>
     <strong>{RANGE_LABELS[value]??"8'"}</strong>
     <select value={value} onChange={e=>onChange(+e.target.value)}>{RANGE_LABELS.map((x,i)=><option value={i} key={x}>{x}</option>)}</select>
     <b>classic octave</b>
+  </label>;
+}
+
+function SwitchControl({label,on,onToggle,onText='ON',offText='OFF',hint}:{label:string,on:boolean,onToggle:()=>void,onText?:string,offText?:string,hint:string}){
+  return <label className="knob rangeControl">
+    <span>{label}</span>
+    <strong>{on?onText:offText}</strong>
+    <button onClick={onToggle}>{on?'ENABLED':'DISABLED'}</button>
+    <b>{hint}</b>
   </label>;
 }
 
@@ -73,6 +84,9 @@ export default function App(){
   const [contourTarget,setContourTarget]=useState<'amp'|'filter'>('amp');
   const [retrigger,setRetrigger]=useState(false);
   const [priority,setPriority]=useState(0);
+  const [ampDecaySwitch,setAmpDecaySwitch]=useState(false);
+  const [filterDecaySwitch,setFilterDecaySwitch]=useState(false);
+  const [glideMode,setGlideMode]=useState(0);
 
   const update=(k:keyof Patch,v:Patch[keyof Patch])=>{
     const n={...patch,[k]:v} as Patch;
@@ -90,6 +104,9 @@ export default function App(){
   };
   const toggleRetrigger=()=>{const next=!retrigger;setRetrigger(next);engine.setRetrigger(next)};
   const changePriority=(value:number)=>{setPriority(value);engine.setNotePriority(value)};
+  const toggleAmpDecay=()=>{const next=!ampDecaySwitch;setAmpDecaySwitch(next);engine.setAmpDecaySwitch(next)};
+  const toggleFilterDecay=()=>{const next=!filterDecaySwitch;setFilterDecaySwitch(next);engine.setFilterDecaySwitch(next)};
+  const changeGlideMode=(value:number)=>{setGlideMode(value);engine.setGlideMode(value)};
   const play=(n:number)=>engine.noteOn(n,patch);
   const stop=(n?:number)=>engine.noteOff(n,patch);
 
@@ -99,7 +116,7 @@ export default function App(){
     const up=(e:KeyboardEvent)=>{if(map[e.key]!=null)stop(map[e.key])};
     addEventListener('keydown',down);addEventListener('keyup',up);
     return()=>{removeEventListener('keydown',down);removeEventListener('keyup',up)};
-  },[patch,ranges,filterContour,priority,retrigger]);
+  },[patch,ranges,filterContour,priority,retrigger,ampDecaySwitch,filterDecaySwitch,glideMode]);
 
   useEffect(()=>{
     const off=engine.onMeter(m=>{if(m.step!==undefined)setActiveStep(m.step)});
@@ -128,27 +145,28 @@ export default function App(){
     }catch{setMidi('permission/connection failed')}
   };
 
-  const ampControls=<><Knob label="A ATTACK" value={patch.attack} min={.001} max={2} onChange={v=>update('attack',v)} unit="s"/><Knob label="A DECAY" value={patch.decay} min={.02} max={3} onChange={v=>update('decay',v)} unit="s"/><Knob label="A SUSTAIN" value={patch.sustain} min={.01} max={1} onChange={v=>update('sustain',v)}/><Knob label="A RELEASE" value={patch.release} min={.02} max={3} onChange={v=>update('release',v)} unit="s"/></>;
-  const filterControls=<><Knob label="F ATTACK" value={filterContour[0]} min={.001} max={2} onChange={v=>setFilterEnv(0,v)} unit="s"/><Knob label="F DECAY" value={filterContour[1]} min={.02} max={3} onChange={v=>setFilterEnv(1,v)} unit="s"/><Knob label="F SUSTAIN" value={filterContour[2]} min={.01} max={1} onChange={v=>setFilterEnv(2,v)}/><Knob label="F RELEASE" value={filterContour[3]} min={.02} max={3} onChange={v=>setFilterEnv(3,v)} unit="s"/></>;
+  const ampControls=<><Knob label="A ATTACK" value={patch.attack} min={.001} max={2} onChange={v=>update('attack',v)} unit="s"/><Knob label="A DECAY" value={patch.decay} min={.02} max={3} onChange={v=>update('decay',v)} unit="s"/><Knob label="A SUSTAIN" value={patch.sustain} min={.01} max={1} onChange={v=>update('sustain',v)}/><SwitchControl label="LOUDNESS DECAY" on={ampDecaySwitch} onToggle={toggleAmpDecay} onText="DECAY" offText="RELEASE" hint={ampDecaySwitch?'release uses decay time':'independent release'}/></>;
+  const filterControls=<><Knob label="F ATTACK" value={filterContour[0]} min={.001} max={2} onChange={v=>setFilterEnv(0,v)} unit="s"/><Knob label="F DECAY" value={filterContour[1]} min={.02} max={3} onChange={v=>setFilterEnv(1,v)} unit="s"/><Knob label="F SUSTAIN" value={filterContour[2]} min={.01} max={1} onChange={v=>setFilterEnv(2,v)}/><SwitchControl label="FILTER DECAY" on={filterDecaySwitch} onToggle={toggleFilterDecay} onText="DECAY" offText="RELEASE" hint={filterDecaySwitch?'release uses decay time':'independent release'}/></>;
 
   const controls=useMemo(()=>({
-    OSC:<><RangeControl label="OSC1" value={ranges[0]} onChange={v=>setRange(0,v)}/><RangeControl label="OSC2" value={ranges[1]} onChange={v=>setRange(1,v)}/><RangeControl label="OSC3" value={ranges[2]} onChange={v=>setRange(2,v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)} unit="s"/></>,
+    OSC:<><RangeControl label="OSC1" value={ranges[0]} onChange={v=>setRange(0,v)}/><RangeControl label="OSC2" value={ranges[1]} onChange={v=>setRange(1,v)}/><RangeControl label="OSC3" value={ranges[2]} onChange={v=>setRange(2,v)}/><label className="knob rangeControl"><span>GLIDE</span><strong>{GLIDE_LABELS[glideMode]}</strong><select value={glideMode} onChange={e=>changeGlideMode(+e.target.value)}>{GLIDE_LABELS.map((x,i)=><option key={x} value={i}>{x}</option>)}</select><Knob label="TIME / RATE" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)} unit="s"/></label></>,
     MIX:<><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Detune 2" value={patch.detune[1]} min={-24} max={24} onChange={v=>update('detune',[patch.detune[0],v,patch.detune[2]])}/><Knob label="Detune 3" value={patch.detune[2]} min={-24} max={24} onChange={v=>update('detune',[patch.detune[0],patch.detune[1],v])}/></>,
     FILTER:<><Knob label="Cutoff" value={patch.cutoff} min={80} max={9000} onChange={v=>update('cutoff',v)} unit="Hz"/><Knob label="Emphasis" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><Knob label="Contour" value={patch.env} min={0} max={7000} onChange={v=>update('env',v)}/><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/></>,
     CONTOUR:<>{contourTarget==='amp'?ampControls:filterControls}</>,
     MOD:<><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)}/><label className="knob rangeControl"><span>NOTE PRIORITY</span><strong>{PRIORITY_LABELS[priority]}</strong><select value={priority} onChange={e=>changePriority(+e.target.value)}>{PRIORITY_LABELS.map((x,i)=><option value={i} key={x}>{x}</option>)}</select><b>low / high / last</b></label><label className="knob rangeControl"><span>ENVELOPE MODE</span><strong>{retrigger?'RETRIGGER':'LEGATO'}</strong><button onClick={toggleRetrigger}>{retrigger?'EVERY NOTE':'SINGLE TRIGGER'}</button><b>classic legato behavior</b></label></>,
     SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)}><small>{i+1}</small>{n}</button>)}</div>
-  })[page],[patch,seq,playing,activeStep,ranges,filterContour,contourTarget,retrigger,priority]);
+  })[page],[patch,seq,playing,activeStep,ranges,filterContour,contourTarget,retrigger,priority,ampDecaySwitch,filterDecaySwitch,glideMode]);
 
   const keys=[48,50,52,53,55,57,59,60,62,64,65,67,69,71,72];
   const contourText=contourTarget==='amp'?[patch.attack,patch.decay,patch.sustain,patch.release]:filterContour;
+  const decayLinked=contourTarget==='amp'?ampDecaySwitch:filterDecaySwitch;
 
   return <main>
     <header><div><h1>FMiniMug1</h1><p>FM-1 · native 3-OSC ladder performance synth</p></div><button onClick={connectMidi}>MIDI · {midi}</button></header>
     <section className="panel">
       <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatch(PATCHES.find(x=>x.name===e.target.value)!)}>{PATCHES.map(p=><option key={p.name}>{p.name} · {p.category}</option>)}</select></div>
       <nav>{['OSC','MIX','FILTER','CONTOUR','MOD','SEQ'].map(x=><button key={x} className={page===x?'active':''} onClick={()=>setPage(x)}>{x}</button>)}</nav>
-      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} R ${contourText[3].toFixed(2)}`:page==='MOD'?`${PRIORITY_LABELS[priority]} PRIORITY · ${retrigger?'RETRIGGER':'SINGLE TRIGGER'}`:'4 ENCODERS · HOLD = SECONDARY · PRESS = FOCUS'}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
+      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]} · GLIDE ${GLIDE_LABELS[glideMode]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} · ${decayLinked?'DECAY LINK':'FREE RELEASE'}`:page==='MOD'?`${PRIORITY_LABELS[priority]} PRIORITY · ${retrigger?'RETRIGGER':'SINGLE TRIGGER'}`:'4 ENCODERS · HOLD = SECONDARY · PRESS = FOCUS'}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
       <Diagnostics/>
       <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · native sample-clock transport · Keyboard: A W S E D F T G Z H U J K O L</span></div>
       <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)} onMouseLeave={()=>stop(n)}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
