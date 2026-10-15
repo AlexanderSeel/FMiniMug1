@@ -110,10 +110,13 @@ export class StudioEngine{
     else if(r.includes('plate'))reverbValue=.24;
     else if(r.includes('spring'))reverbValue=.20;
     this.mix={layer:this.mix.layer,drums:this.mix.drums,delay:delayValue,reverb:reverbValue,character:fx.character};
-    this.delaySeconds=60/(drums.bpm||120)*(d.includes('slap')?.25:0);
-    if(!d.includes('slap'))this.delaySeconds=60/(drums.bpm||120)*(d.includes('1/4')?.75:.375);
-    this.delayFeedbackAmount=d.includes('dub')?.62:0;
-    if(!d.includes('dub'))this.delayFeedbackAmount=d.includes('tape')?.5:.42;
+    const beat=60/(drums.bpm||120);
+    if(d.includes('slap'))this.delaySeconds=beat*.25;
+    else if(d.includes('1/4'))this.delaySeconds=beat*.75;
+    else this.delaySeconds=beat*.375;
+    if(d.includes('dub'))this.delayFeedbackAmount=.62;
+    else if(d.includes('tape'))this.delayFeedbackAmount=.5;
+    else this.delayFeedbackAmount=.42;
     this.reverbSeconds=r.includes('dark space')?4.4:r.includes('hall')?3.2:r.includes('plate')?2.4:r.includes('spring')?1.6:2.0;
     if(this.reverb&&this.ctx)this.reverb.buffer=this.makeImpulse(this.reverbSeconds,.78);
     this.applyMix();return {...this.mix};
