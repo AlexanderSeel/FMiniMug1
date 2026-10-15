@@ -33,5 +33,6 @@ typedef enum {
   FMM_FILTER_SUSTAIN = 28,
   FMM_FILTER_RELEASE = 29,
   FMM_RETRIGGER = 30,
+  FMM_NOTE_PRIORITY = 31,
   FMM_PARAM_COUNT
 } fmm_param_id_t;
