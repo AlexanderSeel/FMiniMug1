@@ -89,7 +89,6 @@ def find_softfloat_runtime(toolchain: Path, objdump: Path) -> Path:
         if archive.is_file() and archive not in seen:
             candidates.append(archive)
             seen.add(archive)
-
     candidates.sort(key=lambda p: (0 if "pi32v2" in p.parts else 1, str(p)))
     for archive in candidates:
         if archive_defines(objdump, archive, "__subsf3"):
@@ -140,7 +139,7 @@ def main() -> int:
     asm_sources = [fw / "crt0.S", hal / "fm1_vec.S", hal / "fm1_isr.S"]
     c_sources = [target / "fm1_minilibc.c"]
     if synth_check or audio_check:
-        c_sources += [portable / "fm_voice.c", portable / "fm_seq.c", portable / "fm_ui.c", portable / "fm_app.c"]
+        c_sources += [portable / "fm_voice.c", portable / "fm_seq.c", portable / "fm_ui.c", portable / "fm_studio.c", portable / "fm_app.c"]
     else:
         c_sources += [portable / "fm_diag.c"]
     c_sources += [target / "fm1_lcd_bridge.c", target / "fm1_platform_felucca.c", target / "fm1_bootstrap.c", target / "fm1_target_main.c"]
@@ -221,7 +220,7 @@ def main() -> int:
     digest = hashlib.sha256(image).hexdigest()
     if synth_check:
         info_name, sum_name = "SYNTH-CHECK-INFO.txt", "SYNTH-CHECK-SHA256SUMS"
-        title, control_map = "FMiniMug1 full synth target link check", "synthetic-not-for-hardware"
+        title, control_map = "FMiniMug1 Studio beta full synth target link check", "synthetic-not-for-hardware"
     elif audio_check:
         info_name, sum_name = "AUDIO-CHECK-INFO.txt", "AUDIO-CHECK-SHA256SUMS"
         title, control_map = "FMiniMug1 audio timing diagnostic target", "not-required-audio-diagnostic"
@@ -236,6 +235,8 @@ def main() -> int:
         f"start={APP_XIP:#010x}", f"bss_start={symbol('_bss_start'):#010x}", f"bss_end={symbol('_bss_end'):#010x}",
         "installable=no", "flash_write_api=disabled", f"control_map={control_map}",
     ]
+    if synth_check:
+        info += ["studio_beta=yes", "studio_voice_b_oversampling=1x", "studio_delay_samples=2048"]
     if audio_check:
         info.append("audio_budget_ticks=69632")
         info.append("oversampling_test=automatic-1x-2x")
