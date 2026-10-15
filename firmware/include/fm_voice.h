@@ -83,6 +83,25 @@ typedef struct {
   uint16_t held_order[128];
   uint16_t note_serial;
   uint32_t rng;
+
+  /* Cached control-rate values keep libm/division out of the audio hot path. */
+  float amp_attack_k;
+  float amp_decay_k;
+  float amp_release_k;
+  float filter_attack_k;
+  float filter_decay_k;
+  float filter_release_k;
+  float glide_k;
+  float keytrack_ratio;
+  float cache_attack_s;
+  float cache_decay_s;
+  float cache_release_s;
+  float cache_filter_attack_s;
+  float cache_filter_decay_s;
+  float cache_filter_release_s;
+  float cache_glide_s;
+  uint8_t cache_keytrack;
+  uint8_t cache_keynote;
 } fm_voice_t;
 
 void fm_voice_init(fm_voice_t *v, float sample_rate);
