@@ -44,31 +44,22 @@ typedef struct {
   float cutoff_hz;
   float resonance;
   float filter_env_amount;
-
-  /* Loudness contour. Existing parameter IDs 12..15 continue to address it. */
   float attack_s;
   float decay_s;
   float sustain;
   float release_s;
-
-  /* Independent filter contour. */
   float filter_attack_s;
   float filter_decay_s;
   float filter_sustain;
   float filter_release_s;
-
   float glide_s;
   float mixer_drive;
   float filter_drive;
   float drift;
   float feedback;
-  /* 0, 1, 2, 3 = off, 1/3, 2/3, full keyboard tracking. */
   uint8_t filter_keytrack;
-  /* Oversample the oscillator/mixer/ladder path two times. */
   uint8_t oversample_2x;
-  /* 0 = legato does not restart contours, 1 = every selected note retriggers. */
   uint8_t retrigger;
-  /* FM_NOTE_LOW / FM_NOTE_HIGH / FM_NOTE_LAST. */
   uint8_t note_priority;
 } fm_patch_t;
 
@@ -88,12 +79,11 @@ typedef struct {
   uint8_t current_note;
   uint8_t env_amp_stage;
   uint8_t env_filter_stage;
-  uint64_t held_notes[2];
+  /* 4 x 32-bit instead of 2 x 64-bit avoids compiler-rt helpers on pi32v2. */
+  uint32_t held_notes[4];
   uint16_t held_order[128];
   uint16_t note_serial;
   uint32_t rng;
-
-  /* Cached control-rate values keep libm/division out of the audio hot path. */
   float amp_attack_k;
   float amp_decay_k;
   float amp_release_k;
