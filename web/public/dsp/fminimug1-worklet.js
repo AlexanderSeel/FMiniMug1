@@ -32,6 +32,20 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
         for (const [id, value] of m.values) this.exports.fmm_set_param(id, value);
       } else if (m.type === 'noteOn') this.exports.fmm_note_on(m.note, m.velocity ?? 110);
       else if (m.type === 'noteOff') this.exports.fmm_note_off();
+      else if (m.type === 'sequence') {
+        this.exports.fmm_seq_clear();
+        const length = Math.min(64, m.notes?.length ?? 0);
+        this.exports.fmm_seq_set_meta(length || 1, m.bpm ?? 120, m.swing ?? 0);
+        for (let i = 0; i < length; ++i) {
+          const note = m.notes[i] ?? -1;
+          const gate = Math.max(1, Math.min(100, Math.round((m.gates?.[i] ?? .7) * 100)));
+          const velocity = m.velocities?.[i] ?? 108;
+          const flags = m.flags?.[i] ?? 0;
+          const transpose = m.transpose?.[i] ?? 0;
+          this.exports.fmm_seq_set_step(i, note, transpose, velocity, gate, flags);
+        }
+      } else if (m.type === 'seqStart') this.exports.fmm_seq_start();
+      else if (m.type === 'seqStop') this.exports.fmm_seq_stop();
       else if (m.type === 'reset') this.exports.fmm_reset();
     };
   }
@@ -59,7 +73,12 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
 
     if (++this.meterCounter >= 12) {
       this.meterCounter = 0;
-      this.port.postMessage({type: 'meter', peak, rms: Math.sqrt(sum / frames)});
+      this.port.postMessage({
+        type: 'meter',
+        peak,
+        rms: Math.sqrt(sum / frames),
+        step: this.exports.fmm_seq_step ? this.exports.fmm_seq_step() : 0
+      });
     }
     return true;
   }
