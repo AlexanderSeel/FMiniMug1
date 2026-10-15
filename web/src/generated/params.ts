@@ -1,5 +1,5 @@
 // Generated from shared/params.json. Do not edit by hand.
-export const PARAM_PROTOCOL_VERSION=2 as const;
+export const PARAM_PROTOCOL_VERSION=3 as const;
 export const PARAM={
   osc1Level: 0,
   osc2Level: 1,
@@ -32,5 +32,6 @@ export const PARAM={
   filterSustain: 28,
   filterRelease: 29,
   retrigger: 30,
+  notePriority: 31,
 } as const;
 export type ParamId=(typeof PARAM)[keyof typeof PARAM];
