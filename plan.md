@@ -13,18 +13,20 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Document Felucca-compatible installer/build integration strategy.
 
 ## Milestone 1 — Browser reference synth 🚧
-- [x] Three oscillator Web Audio voice.
-- [x] Mixer, noise source, drive and feedback approximation.
-- [x] Resonant 4-pole low-pass approximation.
+- [x] Three oscillator Web Audio fallback voice.
+- [x] Mixer, noise source, drive and feedback fallback approximation.
+- [x] Resonant 4-pole low-pass fallback approximation.
 - [x] Filter and amp contours.
 - [x] Glide/legato behavior.
 - [x] On-screen keyboard and PC keyboard performance.
 - [x] Factory patch browser.
 - [x] Sequence browser + step playback.
-- [ ] Replace browser filter approximation with AudioWorklet/WASM ladder matching native DSP equations.
-- [ ] Add anti-aliased oscillator worklet matching firmware.
-- [ ] Add oscilloscope + spectrum diagnostics.
+- [x] Native `fm_voice.c` DSP compiled to WebAssembly.
+- [x] AudioWorklet renders the native oscillator/mixer/ladder engine in 128-sample blocks.
+- [x] Web Audio remains only as a graceful fallback if WASM/AudioWorklet is unavailable.
+- [x] Oscilloscope + spectrum + peak/RMS diagnostics with active-engine indicator.
 - [ ] Golden-render audio regression tests for every factory patch.
+- [ ] Browser automation curves for smooth live controller parameter changes.
 
 ## Milestone 2 — 240×240 FM-1 UI 🚧
 - [x] Define portable `fm1_platform.h` boundary for display/input/audio/LED/flash/MIDI.
@@ -44,7 +46,7 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [ ] Add 16-step viewport and scrolling 64-step patterns to SEQ/PERF.
 - [ ] Complete hardware HOLD shortcuts for oscillator range/wave, key tracking and performance actions.
 - [ ] Verify physical encoder/button IDs on real FM-1 diagnostic screen.
-- [ ] Make browser controller consume the exact native parameter-ID table rather than duplicated mappings.
+- [ ] Generate browser parameter IDs from the native parameter definition so mappings cannot drift.
 
 ## Milestone 3 — Native DSP engine 🚧
 - [x] PolyBLEP band-limited saw/pulse/square oscillators.
@@ -66,9 +68,9 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Host finite/bounded-output stress tests.
 - [ ] CPU budget and golden render tests.
 
-## Milestone 4 — Presets and sequences
-- [x] Seed original factory bank: bass, lead, brass, drone, keys, SFX and sequence patches.
-- [x] Seed demonstration sequences.
+## Milestone 4 — Presets and sequences 🚧
+- [x] 32 original factory patches across bass, lead, brass, keys, sequences, SFX, drones and percussion.
+- [x] 12 demonstration/performance sequences.
 - [ ] Expand to 64+ original factory presets.
 - [ ] Expand to 32+ sequences: Berlin, funk, prog, electro, soundtrack, educational oscillator/filter demos.
 - [ ] User preset slots in flash.
@@ -98,21 +100,26 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [ ] SHA-256 manifests for every release.
 - [ ] Refuse unknown FM-1 firmware identities by default.
 
-## Milestone 7 — Browser emulator parity
-- [ ] Compile the native DSP/UI core to WASM as the canonical emulator.
+## Milestone 7 — Browser emulator parity 🚧
+- [x] Compile the native DSP core to WASM as the canonical browser sound engine.
+- [x] Run the WASM engine inside an AudioWorklet instead of the UI thread.
+- [x] Keep a clearly indicated Web Audio fallback for unsupported/development environments.
+- [x] CI builds and verifies the generated WASM/worklet assets.
+- [ ] Compile the native 240×240 UI renderer to WASM/canvas for pixel-identical hardware preview.
 - [ ] Persist presets/sequences/settings in IndexedDB/local storage.
-- [ ] Simulated 240×240 screen with physical button/encoder mappings.
-- [ ] MIDI keyboard support.
+- [ ] Simulated physical buttons/encoders around the 240×240 screen.
+- [ ] MIDI keyboard input.
 - [ ] Audio/MIDI recorder and WAV export.
 - [ ] Preset A/B compare.
 
 ## Milestone 8 — QA / release 🚧
 - [x] Host DSP stability tests.
 - [x] Host UI interaction/mapping tests.
+- [x] Compile-check browser native-DSP ABI in CI.
+- [x] Production web + WASM build in CI.
 - [ ] Golden audio render regression suite.
 - [ ] UI clipping/overlap snapshot tests at 240×240.
 - [ ] Web unit tests.
-- [x] Production web build in CI.
 - [ ] Native FM-1 build in CI or reproducible documented container environment.
 - [ ] Real-device smoke test checklist.
 - [ ] Beta release only after installer/recovery path has been verified on hardware.
