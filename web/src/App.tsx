@@ -96,6 +96,11 @@ export default function App(){
     const contour:[number,number,number,number]=[p.attack,p.decay,p.sustain,p.release];
     setPatch(p);setFilterContour(contour);engine.setFilterContour(contour);engine.applyPatch(p);
   };
+  const choosePatchByName=(name:string)=>{
+    const next=PATCHES.find(x=>x.name===name);
+    if(!next){console.warn('Unknown FMiniMug1 patch',name);return}
+    choosePatch(next);
+  };
   const setRange=(index:0|1|2,value:number)=>{
     const next=[...ranges] as [number,number,number];next[index]=value;setRanges(next);engine.setOscRange(index,value);
   };
@@ -131,7 +136,8 @@ export default function App(){
   };
 
   const chooseSequence=async(name:string)=>{
-    const next=SEQS.find(x=>x.name===name)!;
+    const next=SEQS.find(x=>x.name===name);
+    if(!next){console.warn('Unknown FMiniMug1 sequence',name);return}
     setSeq(next);setActiveStep(0);
     if(playing)await engine.startSequence(next);
   };
@@ -164,11 +170,11 @@ export default function App(){
   return <main>
     <header><div><h1>FMiniMug1</h1><p>FM-1 · native 3-OSC ladder performance synth</p></div><button onClick={connectMidi}>MIDI · {midi}</button></header>
     <section className="panel">
-      <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatch(PATCHES.find(x=>x.name===e.target.value)!)}>{PATCHES.map(p=><option key={p.name}>{p.name} · {p.category}</option>)}</select></div>
+      <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatchByName(e.target.value)}>{PATCHES.map(p=><option key={p.name} value={p.name}>{p.name} · {p.category}</option>)}</select></div>
       <nav>{['OSC','MIX','FILTER','CONTOUR','MOD','SEQ'].map(x=><button key={x} className={page===x?'active':''} onClick={()=>setPage(x)}>{x}</button>)}</nav>
       <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]} · GLIDE ${GLIDE_LABELS[glideMode]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} · ${decayLinked?'DECAY LINK':'FREE RELEASE'}`:page==='MOD'?`${PRIORITY_LABELS[priority]} PRIORITY · ${retrigger?'RETRIGGER':'SINGLE TRIGGER'}`:'4 ENCODERS · HOLD = SECONDARY · PRESS = FOCUS'}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
       <Diagnostics/>
-      <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · native sample-clock transport · Keyboard: A W S E D F T G Z H U J K O L</span></div>
+      <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{SEQS.map(s=><option key={s.name} value={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · native sample-clock transport · Keyboard: A W S E D F T G Z H U J K O L</span></div>
       <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)} onMouseLeave={()=>stop(n)}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
     </section>
     <footer>Original FMiniMug1 UI and sound bank · native DSP and sequencer shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
