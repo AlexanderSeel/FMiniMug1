@@ -1,7 +1,7 @@
 # FMiniMug1 Implementation Plan
 
 ## Vision
-Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VAVE FM-1 with a matching 240×240 hardware UI, browser controller, emulator, safe installer path, original factory presets and musical sequences.
+Build a performance-first, Minimoog-inspired synthesizer for the M-VAVE FM-1 that preserves the classic three-oscillator/ladder character while growing into a modern compact performance workstation with scenes, layered synth voices, expressive sequencing, drums and effects.
 
 ## Milestone 0 — Foundation ✅
 - [x] Define product scope and legal/trademark boundaries.
@@ -30,6 +30,7 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Browser step grid and DSP monitor follow the native current sequence step.
 - [x] Web Audio remains only as a graceful fallback if WASM/AudioWorklet is unavailable.
 - [x] Oscilloscope + spectrum + peak/RMS diagnostics with active-engine indicator.
+- [x] Correct fallback sequence transport to 16th-note timing and add swing/rest/transpose handling.
 - [ ] Golden-render audio regression tests for every factory patch.
 - [ ] Browser automation curves for smooth live controller parameter changes.
 
@@ -91,9 +92,12 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 ## Milestone 4 — Presets and sequences 🚧
 - [x] 32 original factory patches across bass, lead, brass, keys, sequences, SFX, drones and percussion.
 - [x] 12 demonstration/performance sequences.
+- [x] Add 8 original Studio 2.0 demo patches for bass/lead/pluck/brass/texture/utility testing.
+- [x] Add 8 expressive Studio 2.0 patterns including swing, rests, velocity, transpose and accent/tie/slide data.
 - [x] Portable 1–64 step sample-clock sequencer core.
 - [x] Per-step gate, velocity, transpose and accent/tie/slide flags in the native sequence model.
 - [x] Pair-preserving swing timing and tie-to-rest release behavior.
+- [x] Browser sends expressive sequence fields into the native WASM sequencer.
 - [ ] Expand to 64+ original factory presets.
 - [ ] Expand to 32+ sequences: Berlin, funk, prog, electro, soundtrack, educational oscillator/filter demos.
 - [ ] User preset slots in flash.
@@ -136,6 +140,8 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [x] Expose decay-linked release switches and TIME/RATE glide in the controller.
 - [x] Keep a clearly indicated Web Audio/timer fallback for unsupported/development environments.
 - [x] CI builds and verifies the generated WASM/worklet assets.
+- [x] Add Studio Scene selector that instantly loads a playable Synth-A patch + expressive pattern.
+- [x] Show future Synth-B/drum/FX/macro targets alongside each scene for regression planning.
 - [ ] Compile the native 240×240 UI renderer to WASM/canvas for pixel-identical hardware preview.
 - [ ] Persist presets/sequences/settings in IndexedDB/local storage.
 - [ ] Simulated physical buttons/encoders around the 240×240 screen.
@@ -162,6 +168,57 @@ Build a performance-first, Minimoog-inspired monophonic synthesizer for the M-VA
 - [ ] Real-device verified semantic control map.
 - [ ] Beta release only after installer/recovery path has been verified on hardware.
 
+## Milestone 9 — Studio 2.0 modern expansion 🚧
+
+The detailed architecture and demo matrix live in `docs/STUDIO_2_0.md`.
+
+### Scene/test foundation
+- [x] Add 8 Studio 2.0 demo scenes.
+- [x] Add 4 analog-drum pattern blueprints used as future regression material.
+- [x] Scene definitions include Synth A, planned Synth B, drums, delay/reverb character and four macro names.
+- [x] Keep every scene anchored to the classic FMiniMug oscillator/mixer/ladder vocabulary.
+- [ ] Canonical persistent scene schema shared by browser and native firmware.
+
+### Dual synth / performance modes
+- [ ] Add independent Synth A + Synth B native voice instances.
+- [ ] Add mixer with A/B level and balance.
+- [ ] SINGLE / LAYER / SPLIT / DUO / UNISON / SEQ-A + LIVE-B modes.
+- [ ] Restore both synth engines atomically from a Scene.
+- [ ] Define a real-device CPU-quality budget for two simultaneous voices.
+
+### Sequencer 2.0
+- [ ] True dedicated slide-time behavior without envelope retrigger.
+- [ ] Accent routing to amp/filter/drive.
+- [ ] Per-step parameter locks.
+- [ ] Four motion-recording lanes.
+- [ ] Probability / conditional trig / ratchet / micro-timing.
+- [ ] Pattern chain / song mode.
+
+### Drum engine
+- [ ] 8 compact analog-style voices: BD, SD, CH, OH, CLAP, TOM, PERC, NOISE/FX.
+- [ ] Route drum drive/filter character through FMiniMug-style nonlinear stages where useful.
+- [ ] Make current demo drum blueprints directly playable.
+
+### FX and character
+- [ ] Per-synth insert FX.
+- [ ] Send A delay: stereo/ping-pong/tape/BBD/multi-tap.
+- [ ] Send B reverb: room/plate/spring/hall/dark-space.
+- [ ] Master saturation/compression/tilt-EQ/limiter/width.
+- [ ] Character modes CLEAN / CLASSIC / AGED / HOT / BROKEN.
+
+### Modulation / performance
+- [ ] LFO1 classic + LFO2 modern/sync/random/step.
+- [ ] 8-slot modulation matrix.
+- [ ] Four performance macros per patch/scene.
+- [ ] A/B morph, later four-corner XY morph.
+- [ ] Scale lock, chord memory and arpeggiator.
+- [ ] Three-note paraphonic mode using OSC1/2/3 into the common ladder path.
+
+### Sample / loop layer
+- [ ] Optional sample oscillator/source through classic mixer/filter/contours.
+- [ ] start/end/tune/loop/reverse/root-note controls.
+- [ ] Simple performance looper only after dual synth, drums and FX timing are stable.
+
 ## Current real-target build facts
 
 Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca 1.6.1).
@@ -174,13 +231,21 @@ Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca
 
 ## FM-1 control concept
 
-### Normal layer
+### Current normal layer
 - Encoder 1–4: four highlighted page parameters.
 - Left/right page buttons: previous/next panel section.
 - Keyboard: notes / sequence transpose.
 - Play: sequencer start/stop.
 - Pattern: sequence selection.
 - Preset: factory/user patch selection.
+
+### Future Studio 2.0 top level
+
+```text
+SYNTH A | SYNTH B | DRUM | SEQ | FX | PERF
+```
+
+The four-encoder + HOLD + FOCUS interaction model remains. Complexity should move behind pages/scenes/macros rather than turning the 240×240 screen into a miniature DAW.
 
 ### HOLD layer
 - OSC: encoder 1–3 select 32'/16'/8'/4'/2'; encoder 4 rotates glide amount and press switches TIME/RATE mode.
@@ -195,7 +260,7 @@ Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca
 Press an encoder to zoom one parameter to nearly full screen, show its graph/value/history and use the keyboard for coarse presets/ranges while the encoder provides fine control.
 
 ## Preset policy
-Factory patches are original parameter sets inspired by recognizable categories of classic analog sounds. Do not copy proprietary preset books, commercial banks, artwork, logos, or patch sheets verbatim.
+Factory patches, patterns, demo scenes and drum blueprints are original FMiniMug1 data inspired by recognizable analog sound/production categories. Do not copy proprietary preset books, commercial banks, factory demo sequences, artwork, logos or patch sheets verbatim.
 
 ## Felucca integration notes
 Felucca is the proven low-level FM-1 reference for `.fwsc` packaging, Web MIDI installation, flash persistence, USB audio/MIDI, ALNK0/I2S audio, the ST7789-class 240×240 display, and the FM-1's 11×6 input matrix with 27 note keys, 14 buttons and seven encoders. FMiniMug1 keeps these details behind `fm1_platform.h`; see `docs/FELUCCA_PORT.md` and `docs/FELUCCA_TARGET_CONTRACT.md` for the port map and safe bring-up order.
