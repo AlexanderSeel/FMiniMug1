@@ -17,14 +17,16 @@ typedef struct {
   uint8_t layer_enabled;
   uint8_t drums_enabled;
   uint8_t character;
+  float sample_rate;
   float layer_level;
   float drum_level;
   float delay_mix;
   float delay_feedback;
   float drive;
+  float kick_tone;
+  float hat_tone;
   uint16_t tempo_bpm;
   uint8_t drum_step;
-  uint32_t drum_samples_to_step;
   float kick_phase;
   float kick_env;
   float snare_env;
