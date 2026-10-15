@@ -92,8 +92,8 @@ export class StudioEngine{
   configure(patchB:Patch,drums:DrumPatternLike,fx:SceneFxLike):StudioMix{
     this.patchB=patchB;this.drumPattern=drums;
     const d=fx.delay.toLowerCase(),r=fx.reverb.toLowerCase();
-    const delay=d==='off'?0:d.includes('dub')?.34:d.includes('ping')?.30:d.includes('multi')?.28:d.includes('bbd')?.25:.22;
-    const reverb=r==='off'?0:r.includes('dark space')?.36:r.includes('hall')?.30:r.includes('plate')?.24:r.includes('spring')?.20:.16;
+    const delay=d==='off'?0:d.includes('dub') ? .34 : d.includes('ping') ? .30 : d.includes('multi') ? .28 : d.includes('bbd') ? .25 : .22;
+    const reverb=r==='off'?0:r.includes('dark space') ? .36 : r.includes('hall') ? .30 : r.includes('plate') ? .24 : r.includes('spring') ? .20 : .16;
     this.mix={layer:this.mix.layer,drums:this.mix.drums,delay,reverb,character:fx.character};
     this.applyMix();return {...this.mix};
   }
