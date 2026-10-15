@@ -12,6 +12,7 @@ function Knob({label,value,min,max,onChange,unit=''}:{label:string,value:number,
 }
 
 const RANGE_LABELS=["32'","16'","8'","4'","2'"];
+const PRIORITY_LABELS=['LOW','HIGH','LAST'];
 function RangeControl({label,value,onChange}:{label:string,value:number,onChange:(v:number)=>void}){
   return <label className="knob rangeControl">
     <span>{label} RANGE</span>
@@ -71,6 +72,7 @@ export default function App(){
   const [filterContour,setFilterContour]=useState<[number,number,number,number]>([patch.attack,patch.decay,patch.sustain,patch.release]);
   const [contourTarget,setContourTarget]=useState<'amp'|'filter'>('amp');
   const [retrigger,setRetrigger]=useState(false);
+  const [priority,setPriority]=useState(0);
 
   const update=(k:keyof Patch,v:Patch[keyof Patch])=>{
     const n={...patch,[k]:v} as Patch;
@@ -87,18 +89,17 @@ export default function App(){
     const next=[...filterContour] as [number,number,number,number];next[index]=value;setFilterContour(next);engine.setFilterContour(next);
   };
   const toggleRetrigger=()=>{const next=!retrigger;setRetrigger(next);engine.setRetrigger(next)};
+  const changePriority=(value:number)=>{setPriority(value);engine.setNotePriority(value)};
   const play=(n:number)=>engine.noteOn(n,patch);
-  const stop=()=>engine.noteOff(patch);
+  const stop=(n?:number)=>engine.noteOff(n,patch);
 
   useEffect(()=>{
-    const down=(e:KeyboardEvent)=>{
-      const map:Record<string,number>={a:48,w:49,s:50,e:51,d:52,f:53,t:54,g:55,z:56,h:57,u:58,j:59,k:60,o:61,l:62};
-      if(map[e.key]!=null&&!e.repeat)play(map[e.key]);
-    };
-    const up=(e:KeyboardEvent)=>{if('awsedftgzhujkol'.includes(e.key))stop()};
+    const map:Record<string,number>={a:48,w:49,s:50,e:51,d:52,f:53,t:54,g:55,z:56,h:57,u:58,j:59,k:60,o:61,l:62};
+    const down=(e:KeyboardEvent)=>{if(map[e.key]!=null&&!e.repeat)play(map[e.key])};
+    const up=(e:KeyboardEvent)=>{if(map[e.key]!=null)stop(map[e.key])};
     addEventListener('keydown',down);addEventListener('keyup',up);
     return()=>{removeEventListener('keydown',down);removeEventListener('keyup',up)};
-  },[patch,ranges,filterContour]);
+  },[patch,ranges,filterContour,priority,retrigger]);
 
   useEffect(()=>{
     const off=engine.onMeter(m=>{if(m.step!==undefined)setActiveStep(m.step)});
@@ -135,9 +136,9 @@ export default function App(){
     MIX:<><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Detune 2" value={patch.detune[1]} min={-24} max={24} onChange={v=>update('detune',[patch.detune[0],v,patch.detune[2]])}/><Knob label="Detune 3" value={patch.detune[2]} min={-24} max={24} onChange={v=>update('detune',[patch.detune[0],patch.detune[1],v])}/></>,
     FILTER:<><Knob label="Cutoff" value={patch.cutoff} min={80} max={9000} onChange={v=>update('cutoff',v)} unit="Hz"/><Knob label="Emphasis" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><Knob label="Contour" value={patch.env} min={0} max={7000} onChange={v=>update('env',v)}/><Knob label="Drive" value={patch.drive} min={.5} max={3} onChange={v=>update('drive',v)}/></>,
     CONTOUR:<>{contourTarget==='amp'?ampControls:filterControls}</>,
-    MOD:<><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)}/><Knob label="Res" value={patch.res} min={0} max={1} onChange={v=>update('res',v)}/><label className="knob rangeControl"><span>ENVELOPE MODE</span><strong>{retrigger?'RETRIGGER':'LEGATO'}</strong><button onClick={toggleRetrigger}>{retrigger?'EVERY NOTE':'LEGATO'}</button><b>HOLD-layer equivalent</b></label></>,
-    SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n)} onMouseUp={stop}><small>{i+1}</small>{n}</button>)}</div>
-  })[page],[patch,seq,playing,activeStep,ranges,filterContour,contourTarget,retrigger]);
+    MOD:<><Knob label="Drift" value={patch.drift} min={0} max={1} onChange={v=>update('drift',v)}/><Knob label="Glide" value={patch.glide} min={0} max={.5} onChange={v=>update('glide',v)}/><label className="knob rangeControl"><span>NOTE PRIORITY</span><strong>{PRIORITY_LABELS[priority]}</strong><select value={priority} onChange={e=>changePriority(+e.target.value)}>{PRIORITY_LABELS.map((x,i)=><option value={i} key={x}>{x}</option>)}</select><b>low / high / last</b></label><label className="knob rangeControl"><span>ENVELOPE MODE</span><strong>{retrigger?'RETRIGGER':'LEGATO'}</strong><button onClick={toggleRetrigger}>{retrigger?'EVERY NOTE':'SINGLE TRIGGER'}</button><b>classic legato behavior</b></label></>,
+    SEQ:<div className="steps">{seq.notes.map((n,i)=><button key={i} className={playing&&activeStep===i?'activeStep':''} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)}><small>{i+1}</small>{n}</button>)}</div>
+  })[page],[patch,seq,playing,activeStep,ranges,filterContour,contourTarget,retrigger,priority]);
 
   const keys=[48,50,52,53,55,57,59,60,62,64,65,67,69,71,72];
   const contourText=contourTarget==='amp'?[patch.attack,patch.decay,patch.sustain,patch.release]:filterContour;
@@ -147,10 +148,10 @@ export default function App(){
     <section className="panel">
       <div className="panelTitle"><span>PERFORMANCE CONTROL</span><strong>{patch.name}</strong><select value={patch.name} onChange={e=>choosePatch(PATCHES.find(x=>x.name===e.target.value)!)}>{PATCHES.map(p=><option key={p.name}>{p.name} · {p.category}</option>)}</select></div>
       <nav>{['OSC','MIX','FILTER','CONTOUR','MOD','SEQ'].map(x=><button key={x} className={page===x?'active':''} onClick={()=>setPage(x)}>{x}</button>)}</nav>
-      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} R ${contourText[3].toFixed(2)}`:'4 ENCODERS · HOLD = SECONDARY · PRESS = FOCUS'}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
+      <div className="screen"><div className="lcd"><span>FMiniMug1 / {page}</span><strong>{patch.name}</strong><i>{page==='OSC'?`RANGE ${RANGE_LABELS[ranges[0]]} · ${RANGE_LABELS[ranges[1]]} · ${RANGE_LABELS[ranges[2]]}`:page==='FILTER'?`CUT ${Math.round(patch.cutoff)}  EMP ${Math.round(patch.res*100)}%`:page==='CONTOUR'?`${contourTarget.toUpperCase()} · A ${contourText[0].toFixed(2)} D ${contourText[1].toFixed(2)} S ${Math.round(contourText[2]*100)} R ${contourText[3].toFixed(2)}`:page==='MOD'?`${PRIORITY_LABELS[priority]} PRIORITY · ${retrigger?'RETRIGGER':'SINGLE TRIGGER'}`:'4 ENCODERS · HOLD = SECONDARY · PRESS = FOCUS'}</i>{page==='CONTOUR'&&<button className="lcdMode" onClick={()=>setContourTarget(contourTarget==='amp'?'filter':'amp')}>{contourTarget==='amp'?'LOUDNESS → FILTER':'FILTER → LOUDNESS'}</button>}</div><div className="controls">{controls}</div></div>
       <Diagnostics/>
       <div className="seqbar"><select value={seq.name} onChange={e=>void chooseSequence(e.target.value)}>{SEQS.map(s=><option key={s.name}>{s.name} · {s.bpm} BPM</option>)}</select><button className={playing?'stop':''} onClick={()=>void toggleSeq()}>{playing?'STOP':'PLAY SEQUENCE'}</button><span>{PATCHES.length} patches · {SEQS.length} sequences · native sample-clock transport · Keyboard: A W S E D F T G Z H U J K O L</span></div>
-      <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={stop} onMouseLeave={stop}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
+      <div className="keyboard">{keys.map(n=><button key={n} onMouseDown={()=>play(n)} onMouseUp={()=>stop(n)} onMouseLeave={()=>stop(n)}>{['C','D','E','F','G','A','B'][[0,2,4,5,7,9,11].indexOf(n%12)]||'•'}<small>{n}</small></button>)}</div>
     </section>
     <footer>Original FMiniMug1 UI and sound bank · native DSP and sequencer shared with the firmware target · not affiliated with Moog Music or M-VAVE.</footer>
   </main>;
