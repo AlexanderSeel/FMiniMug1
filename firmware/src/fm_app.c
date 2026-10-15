@@ -91,7 +91,7 @@ void fm_app_tick(fm_app_t *app,const char *preset_name){
   if((uint32_t)(now-app->last_ui_ms)>=FM1_UI_FRAME_MS){
     app->last_ui_ms=now;
     fm_ui_set_sequence_view(&app->ui,app->sequence_loaded?&app->sequencer.pattern:0,app->sequencer.step_index);
-    fm_ui_render(&app->ui,&app->voice.patch,preset_name);
     if(app->studio.active)fm_studio_render(&app->studio);
+    else fm_ui_render(&app->ui,&app->voice.patch,preset_name);
   }
 }
