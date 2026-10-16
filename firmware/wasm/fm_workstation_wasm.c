@@ -1,5 +1,6 @@
 #include "fm_workstation_seq.h"
 #include "fm_workstation_fx.h"
+#include "fm_workstation_runtime.h"
 #include "fm_bass808.h"
 #include "fm_drum808.h"
 #include "fm_alpha.h"
@@ -29,15 +30,12 @@ static fmd808_t drums;
 static fma_t alpha;
 static fmw_fx_t fx;
 static fmw_seq_clock_t clock_state;
+static fmw_runtime_t runtime_state;
 static fmw_mini_step_t mini_steps[FMW_PATTERN_STEPS];
 static fmw_bass_step_t bass_steps[FMW_PATTERN_STEPS];
 static fmw_drum_step_t drum_steps[FMW_PATTERN_STEPS];
 static fmw_alpha_step_t alpha_steps[FMW_PATTERN_STEPS];
 static float output[128];
-static float mini_level = 0.72f;
-static float bass_level = 0.38f;
-static float drum_level = 0.42f;
-static float alpha_level = 0.62f;
 static uint32_t mini_gate_left;
 static uint32_t bass_gate_left;
 static uint32_t alpha_gate_left;
@@ -117,17 +115,37 @@ static void step_event(uint8_t step, void *user) {
 }
 
 __attribute__((visibility("default"))) void fmw_wasm_init(float sample_rate) {
-  fmm_init(sample_rate); fmb808_init(&bass, sample_rate); fmd808_init(&drums, sample_rate); fma_init(&alpha, sample_rate); fmw_fx_init(&fx, sample_rate); fmw_seq_clock_init(&clock_state, sample_rate); clear_patterns();
-  mini_gate_left = bass_gate_left = alpha_gate_left = 0u; mini_seq_note = -1; current_step = 0u; initialized = 1;
+  fmm_init(sample_rate);
+  fmb808_init(&bass, sample_rate);
+  fmd808_init(&drums, sample_rate);
+  fma_init(&alpha, sample_rate);
+  fmw_fx_init(&fx, sample_rate);
+  fmw_seq_clock_init(&clock_state, sample_rate);
+  fmw_runtime_init(&runtime_state);
+  fmw_seq_clock_configure(&clock_state, &runtime_state.clock);
+  fmw_fx_set_param(&fx, FMW_FX_DELAY, runtime_state.fx[FMW_FX_DELAY]);
+  fmw_fx_set_param(&fx, FMW_FX_AMBIENCE, runtime_state.fx[FMW_FX_AMBIENCE]);
+  fmw_fx_set_param(&fx, FMW_FX_DRIVE, runtime_state.fx[FMW_FX_DRIVE]);
+  clear_patterns();
+  mini_gate_left = bass_gate_left = alpha_gate_left = 0u;
+  mini_seq_note = -1;
+  current_step = 0u;
+  initialized = 1;
 }
 static void ensure_init(void) { if (!initialized) fmw_wasm_init(48000.0f); }
 __attribute__((visibility("default"))) void fmw_wasm_reset(void) { const float sr = clock_state.sample_rate > 1000.0f ? clock_state.sample_rate : 48000.0f; fmw_wasm_init(sr); }
 
 __attribute__((visibility("default"))) void fmw_wasm_set_level(int part, float value) {
-  ensure_init(); if (value < 0.0f) value = 0.0f; if (value > 1.25f) value = 1.25f;
-  if (part == 0) mini_level = value; else if (part == 1) drum_level = value; else if (part == 2) bass_level = value; else if (part == 3) alpha_level = value;
+  ensure_init();
+  if (part >= 0 && part < (int)FMW_RUNTIME_PART_COUNT) fmw_runtime_set_part_level(&runtime_state, (uint8_t)part, value);
 }
-__attribute__((visibility("default"))) void fmw_wasm_set_fx(int param, float value) { ensure_init(); if (param >= (int)FMW_FX_DELAY && param <= (int)FMW_FX_DRIVE) fmw_fx_set_param(&fx, (fmw_fx_param_t)param, value); }
+__attribute__((visibility("default"))) void fmw_wasm_set_fx(int param, float value) {
+  ensure_init();
+  if (param >= (int)FMW_FX_DELAY && param <= (int)FMW_FX_DRIVE) {
+    fmw_runtime_set_fx(&runtime_state, (uint8_t)param, value);
+    fmw_fx_set_param(&fx, (fmw_fx_param_t)param, runtime_state.fx[param]);
+  }
+}
 __attribute__((visibility("default"))) void fmw_wasm_mini_param(int id, float value) { ensure_init(); fmm_set_param(id, value); }
 __attribute__((visibility("default"))) void fmw_wasm_mini_note_on(int note, int velocity) { ensure_init(); fmm_note_on(note, velocity); }
 __attribute__((visibility("default"))) void fmw_wasm_mini_note_off(int note) { ensure_init(); fmm_note_off_note(note); }
@@ -199,7 +217,12 @@ __attribute__((visibility("default"))) void fmw_wasm_alpha_note_on(int note, int
 __attribute__((visibility("default"))) void fmw_wasm_alpha_note_off(int note) { ensure_init(); if (note < 0) note = 0; if (note > 127) note = 127; fma_note_off(&alpha, (uint8_t)note); }
 
 __attribute__((visibility("default"))) void fmw_wasm_seq_meta(int length, int bpm, int swing) {
-  ensure_init(); fmw_seq_clock_config_t cfg; cfg.length = (uint8_t)(length < 1 ? 1 : (length > FMW_PATTERN_STEPS ? FMW_PATTERN_STEPS : length)); cfg.bpm = (uint16_t)(bpm < 40 ? 40 : (bpm > 300 ? 300 : bpm)); cfg.swing = (uint8_t)(swing < 0 ? 0 : (swing > 75 ? 75 : swing)); fmw_seq_clock_configure(&clock_state, &cfg);
+  ensure_init();
+  fmw_runtime_set_clock(&runtime_state,
+      (uint8_t)(length < 0 ? 0 : length),
+      (uint16_t)(bpm < 0 ? 0 : bpm),
+      (uint8_t)(swing < 0 ? 0 : swing));
+  fmw_seq_clock_configure(&clock_state, &runtime_state.clock);
 }
 __attribute__((visibility("default"))) void fmw_wasm_seq_mini_step(int index, int note, int velocity, int gate) {
   ensure_init(); if (index < 0 || index >= FMW_PATTERN_STEPS) return; if (note < -1) note = -1; if (note > 127) note = 127; if (velocity < 1) velocity = 1; if (velocity > 127) velocity = 127; if (gate < 1) gate = 1; if (gate > 400) gate = 400;
@@ -215,8 +238,8 @@ __attribute__((visibility("default"))) void fmw_wasm_seq_alpha_step(int index, i
   for (int n = 0; n < FMW_ALPHA_NOTES; ++n) { int note = notes[n]; if (note < -1) note = -1; if (note > 127) note = 127; alpha_steps[index].note[n] = (int8_t)note; }
   if (velocity < 1) velocity = 1; if (velocity > 127) velocity = 127; if (gate < 1) gate = 1; if (gate > 400) gate = 400; alpha_steps[index].velocity = (uint8_t)velocity; alpha_steps[index].gate = (uint16_t)gate;
 }
-__attribute__((visibility("default"))) void fmw_wasm_seq_start(void) { ensure_init(); fmw_seq_clock_start(&clock_state); }
-__attribute__((visibility("default"))) void fmw_wasm_seq_stop(void) { ensure_init(); fmw_seq_clock_stop(&clock_state); mini_seq_off(); fmb808_note_off(&bass); bass_gate_left = 0u; alpha_seq_off(); }
+__attribute__((visibility("default"))) void fmw_wasm_seq_start(void) { ensure_init(); fmw_runtime_start(&runtime_state); fmw_seq_clock_start(&clock_state); }
+__attribute__((visibility("default"))) void fmw_wasm_seq_stop(void) { ensure_init(); fmw_runtime_stop(&runtime_state); fmw_seq_clock_stop(&clock_state); mini_seq_off(); fmb808_note_off(&bass); bass_gate_left = 0u; alpha_seq_off(); }
 __attribute__((visibility("default"))) int fmw_wasm_seq_step(void) { return (int)current_step; }
 
 __attribute__((visibility("default"))) uintptr_t fmw_wasm_render(int frames) {
@@ -226,10 +249,10 @@ __attribute__((visibility("default"))) uintptr_t fmw_wasm_render(int frames) {
     if (mini_gate_left && !--mini_gate_left) mini_seq_off();
     if (bass_gate_left && !--bass_gate_left) fmb808_note_off(&bass);
     if (alpha_gate_left && !--alpha_gate_left) alpha_seq_off();
-    float sample = mini[i] * mini_level;
-    sample += fmd808_process(&drums) * drum_level;
-    sample += fmb808_process(&bass) * bass_level;
-    sample += fma_process(&alpha) * alpha_level;
+    float sample = mini[i] * runtime_state.part_level[FMW_PART_MINI];
+    sample += fmd808_process(&drums) * runtime_state.part_level[FMW_PART_DRUM808];
+    sample += fmb808_process(&bass) * runtime_state.part_level[FMW_PART_BASS808];
+    sample += fma_process(&alpha) * runtime_state.part_level[FMW_PART_ALPHA];
     output[i] = fmw_fx_process(&fx, sample);
   }
   return (uintptr_t)output;
