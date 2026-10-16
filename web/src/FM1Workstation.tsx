@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type PointerEvent as ReactPointerEvent} from 'react';
 import {WORKSTATION_GLOBAL_PAGES,WORKSTATION_PARTS,type WorkstationPartId} from './generated/workstation';
-import {workstation,type WorkstationScene} from './audio/workstation';
+import {workstation,type WorkstationScene,type WorkstationMiniStep,type WorkstationAlphaStep} from './audio/workstation';
 import {BASS808_PARAM,type Bass808Pattern} from './audio/bass808';
 import {type Drum808Pattern,type Drum808VoiceId} from './audio/drum808';
 import {ALPHA_PARAM} from './audio/alpha';
@@ -11,13 +11,13 @@ import './fm1Virtual.css';
 type Binding={id:number;min:number;max:number;step:number;initial:number;unit?:string;kind?:'toggle'|'wave'|'mode'};
 type ActiveNote={note:number;index:number;part:WorkstationPartId};
 type DrumVoiceState={level:number;tune:number;decay:number;tone:number};
+type AlphaLaneStep={chord:number;gate:number;velocity:number};
 
 const PARTS:WorkstationPartId[]=['mini','drum808','bass808','alpha'];
 const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const DRUM_SHORT=['BD','SD','CH','OH','CP','TM','CB','RS'];
 const COMPUTER_KEYS=['KeyZ','KeyS','KeyX','KeyD','KeyC','KeyV','KeyG','KeyB','KeyH','KeyN','KeyJ','KeyM','Comma','KeyL','Period','Semicolon','Slash','KeyQ','Digit2','KeyW','Digit3','KeyE','KeyR','Digit5','KeyT','Digit6','KeyY'];
-const ALPHA_CHORDS=[[48,55,60],[45,52,57],[50,57,62],[43,50,55],[48,52,55]];
-const MINI_DRONES=[60,64,55,48,60];
+const ALPHA_CHORDS:[[number,number,number,number],[number,number,number,number],[number,number,number,number],[number,number,number,number],[number,number,number,number]]=[[48,55,60,64],[45,52,57,60],[50,57,62,65],[43,50,55,59],[48,52,55,60]];
 
 const MINI:Record<string,(Binding|null)[]>={
   osc:[{id:PARAM.osc1Level,min:0,max:1,step:.04,initial:.8},{id:PARAM.osc2Level,min:0,max:1,step:.04,initial:.55},{id:PARAM.osc3Level,min:0,max:1,step:.04,initial:.35},{id:PARAM.glide,min:0,max:1.5,step:.02,initial:.05,unit:'s'}],
@@ -46,8 +46,12 @@ function initialDrumKit():DrumVoiceState[]{return Array.from({length:8},(_,i)=>(
 function initialValues(map:Record<string,(Binding|null)[]>){const out:Record<number,number>={};for(const p of Object.values(map))for(const b of p)if(b&&out[b.id]===undefined)out[b.id]=b.initial;return out}
 function pretty(b:Binding|null,v:number|undefined){if(!b||v===undefined)return '—';if(b.kind==='wave')return v>=.5?'SQUARE':'SAW';if(b.kind==='toggle')return v>=.5?'ON':'OFF';if(b.kind==='mode')return String(Math.round(v));if(b.unit==='Hz')return `${Math.round(v)} Hz`;if(b.unit==='s')return `${v.toFixed(v<.1?3:2)} s`;return v.toFixed(2)}
 function ratio(b:Binding|null,v:number|undefined){if(!b||v===undefined||b.max===b.min)return .5;return Math.max(0,Math.min(1,(v-b.min)/(b.max-b.min)))}
+function noteName(note:number){return note<0?'REST':`${NOTE_NAMES[(note+120)%12]}${Math.floor(note/12)-1}`}
 function cloneBass(index:number):Bass808Pattern{const p=WORKSTATION_SCENES[index].bassPattern;return {...p,steps:p.steps.map(s=>({...s}))}}
 function cloneDrums(index:number):Drum808Pattern{const p=WORKSTATION_SCENES[index].drumPattern;return {...p,steps:p.steps.map(s=>({...s}))}}
+function sceneRoot(index:number){const note=WORKSTATION_SCENES[index].bassPattern.steps.find(s=>s.note>=0)?.note??48;return Math.max(24,Math.min(84,note+12))}
+function createMiniLane(index:number):WorkstationMiniStep[]{const root=sceneRoot(index);const offsets=[0,0,7,0];return Array.from({length:16},(_,i)=>i%4===0?{note:Math.min(127,root+offsets[(i/4)%4]),velocity:92,gate:3.55}:{note:-1,velocity:92,gate:.9})}
+function createAlphaLane(index:number):AlphaLaneStep[]{const progression=[index%ALPHA_CHORDS.length,(index+1)%ALPHA_CHORDS.length,(index+3)%ALPHA_CHORDS.length,index%ALPHA_CHORDS.length];return Array.from({length:16},(_,i)=>i%4===0?{chord:progression[(i/4)%4],gate:3.55,velocity:82}:{chord:-1,gate:.9,velocity:82})}
 
 export function FM1Workstation(){
   const [partId,setPartId]=useState<WorkstationPartId>('mini');
@@ -56,10 +60,11 @@ export function FM1Workstation(){
   const [sceneIndex,setSceneIndex]=useState(0);
   const [tempo,setTempo]=useState(WORKSTATION_SCENES[0].bpm);
   const [swing,setSwing]=useState(WORKSTATION_SCENES[0].swing);
+  const [miniLane,setMiniLane]=useState<WorkstationMiniStep[]>(()=>createMiniLane(0));
   const [bassPattern,setBassPattern]=useState(()=>cloneBass(0));
   const [drumPattern,setDrumPattern]=useState(()=>cloneDrums(0));
+  const [alphaLane,setAlphaLane]=useState<AlphaLaneStep[]>(()=>createAlphaLane(0));
   const [seqCursor,setSeqCursor]=useState(0);
-  const [alphaChord,setAlphaChord]=useState(0);
   const [playing,setPlaying]=useState(false);
   const [step,setStep]=useState(0);
   const [peak,setPeak]=useState(0);
@@ -89,20 +94,24 @@ export function FM1Workstation(){
   const bindingValues:Record<number,number>=partId==='mini'?miniValues:partId==='bass808'?bassValues:alphaValues;
   const visiblePage=globalPage===null?page:WORKSTATION_GLOBAL_PAGES[globalPage];
   const currentDrum=drumKit[drumVoice];
+  const miniStep=miniLane[seqCursor%miniLane.length];
   const bassStep=bassPattern.steps[seqCursor%bassPattern.steps.length];
   const drumStep=drumPattern.steps[seqCursor%drumPattern.steps.length];
+  const alphaStep=alphaLane[seqCursor%alphaLane.length];
 
   useEffect(()=>workstation.onMeter(m=>{setStep(m.step);setPeak(m.peak)}),[]);
   useEffect(()=>workstation.onError(error=>{setAudioState('error');setMessage(error)}),[]);
 
-  const pushSequence=useCallback(()=>{
-    const length=Math.max(bassPattern.steps.length,drumPattern.steps.length);
-    workstation.setSequenceMeta(length,tempo,swing);
+  const pushSequence=useCallback((ml=miniLane,bp=bassPattern,dp=drumPattern,al=alphaLane,bpm=tempo,sw=swing)=>{
+    const length=Math.max(ml.length,bp.steps.length,dp.steps.length,al.length);
+    workstation.setSequenceMeta(length,bpm,sw);
     for(let i=0;i<length;i++){
-      const b=bassPattern.steps[i%bassPattern.steps.length];workstation.setBassStep(i,b.note,{accent:!!b.accent,slide:!!b.slide,gate:b.gate??.72});
-      const d=drumPattern.steps[i%drumPattern.steps.length];workstation.setDrumStep(i,d.hits,d.accent);
+      const m=ml[i%ml.length];workstation.setMiniStep(i,m.note,{velocity:m.velocity,gate:m.gate});
+      const b=bp.steps[i%bp.steps.length];workstation.setBassStep(i,b.note,{accent:!!b.accent,slide:!!b.slide,gate:b.gate??.72});
+      const d=dp.steps[i%dp.steps.length];workstation.setDrumStep(i,d.hits,d.accent);
+      const a=al[i%al.length];const notes=a.chord>=0?ALPHA_CHORDS[a.chord%ALPHA_CHORDS.length]:[-1,-1,-1,-1];workstation.setAlphaStep(i,notes,{velocity:a.velocity,gate:a.gate});
     }
-  },[bassPattern,drumPattern,swing,tempo]);
+  },[alphaLane,bassPattern,drumPattern,miniLane,swing,tempo]);
 
   const ensureAudio=useCallback(async()=>{
     try{
@@ -127,30 +136,31 @@ export function FM1Workstation(){
   useEffect(()=>{const down=(e:KeyboardEvent)=>{const t=e.target as HTMLElement|null;if(t?.matches('input,textarea,select,[contenteditable="true"]'))return;const i=COMPUTER_KEYS.indexOf(e.code);if(i<0||e.repeat)return;e.preventDefault();void triggerSource(`kbd:${e.code}`,53+i+octave*12,i)};const up=(e:KeyboardEvent)=>{const key=`kbd:${e.code}`;if(!activeRef.current.has(key))return;e.preventDefault();releaseSource(key)};const blur=()=>releaseAll();window.addEventListener('keydown',down);window.addEventListener('keyup',up);window.addEventListener('blur',blur);return()=>{window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);window.removeEventListener('blur',blur)}},[octave,releaseAll,releaseSource,triggerSource]);
 
   const runtimeScene=():WorkstationScene=>({...scene,bpm:tempo,swing,bassPattern:{...bassPattern,bpm:tempo,swing},drumPattern:{...drumPattern,bpm:tempo,swing},bassPatch:{...scene.bassPatch,values:{...bassValues} as typeof scene.bassPatch.values},alphaPatch:{...scene.alphaPatch,values:{...alphaValues} as typeof scene.alphaPatch.values}});
-  const stopLayers=(index=sceneIndex)=>{workstation.miniNoteOff(MINI_DRONES[index%MINI_DRONES.length]);for(const n of ALPHA_CHORDS[alphaChord%ALPHA_CHORDS.length])workstation.alphaNoteOff(n)};
-  const startTransport=async()=>{releaseAll();if(!await ensureAudio())return;await workstation.loadScene(runtimeScene());workstation.play();workstation.miniNoteOn(MINI_DRONES[sceneIndex%MINI_DRONES.length],76);for(const n of ALPHA_CHORDS[alphaChord%ALPHA_CHORDS.length])workstation.alphaNoteOn(n,74);setPlaying(true)};
-  const stopTransport=()=>{workstation.stop();stopLayers();setPlaying(false)};
+  const startTransport=async()=>{releaseAll();if(!await ensureAudio())return;await workstation.loadScene(runtimeScene());pushSequence();workstation.play();setPlaying(true)};
+  const stopTransport=()=>{workstation.stop();setPlaying(false)};
   const toggleTransport=()=>playing?stopTransport():void startTransport();
 
-  const loadScene=async(next:number)=>{const n=(next+WORKSTATION_SCENES.length)%WORKSTATION_SCENES.length;const wasPlaying=playing;if(wasPlaying){workstation.stop();stopLayers()}const s=WORKSTATION_SCENES[n];const bp=cloneBass(n),dp=cloneDrums(n);setSceneIndex(n);setTempo(s.bpm);setSwing(s.swing);setBassPattern(bp);setDrumPattern(dp);setSeqCursor(0);setAlphaChord(n%ALPHA_CHORDS.length);setBassValues({...initialValues(BASS),...s.bassPatch.values});setAlphaValues({...initialValues(ALPHA),...s.alphaPatch.values});if(await ensureAudio()){await workstation.loadScene(s);if(wasPlaying){workstation.play();workstation.miniNoteOn(MINI_DRONES[n%MINI_DRONES.length],76);for(const note of ALPHA_CHORDS[n%ALPHA_CHORDS.length])workstation.alphaNoteOn(note,74)}}};
+  const loadScene=async(next:number)=>{const n=(next+WORKSTATION_SCENES.length)%WORKSTATION_SCENES.length;const wasPlaying=playing;if(wasPlaying)workstation.stop();const s=WORKSTATION_SCENES[n];const bp=cloneBass(n),dp=cloneDrums(n),ml=createMiniLane(n),al=createAlphaLane(n);setSceneIndex(n);setTempo(s.bpm);setSwing(s.swing);setMiniLane(ml);setBassPattern(bp);setDrumPattern(dp);setAlphaLane(al);setSeqCursor(0);setBassValues({...initialValues(BASS),...s.bassPatch.values});setAlphaValues({...initialValues(ALPHA),...s.alphaPatch.values});if(await ensureAudio()){await workstation.loadScene(s);pushSequence(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
 
   const changePart=(next:WorkstationPartId)=>{releaseAll();setGlobalPage(null);setPartId(next)};
   const cyclePart=(delta=1)=>{const i=PARTS.indexOf(partId);changePart(PARTS[(i+delta+PARTS.length)%PARTS.length])};
   const cyclePage=(delta=1)=>{if(globalPage!==null){setGlobalPage((globalPage+delta+WORKSTATION_GLOBAL_PAGES.length)%WORKSTATION_GLOBAL_PAGES.length);return}setPageIndex(p=>({...p,[partId]:((p[partId]??0)+delta+part.pages.length)%part.pages.length}))};
   const jumpPage=(id:string)=>{setGlobalPage(null);const i=part.pages.findIndex(p=>p.id===id);if(i>=0)setPageIndex(p=>({...p,[partId]:i}))};
-  const setTempoLive=(v:number)=>{const next=Math.max(40,Math.min(300,Math.round(v)));setTempo(next);workstation.setSequenceMeta(Math.max(bassPattern.steps.length,drumPattern.steps.length),next,swing)};
-  const setSwingLive=(v:number)=>{const next=Math.max(0,Math.min(75,Math.round(v)));setSwing(next);workstation.setSequenceMeta(Math.max(bassPattern.steps.length,drumPattern.steps.length),tempo,next)};
+  const setTempoLive=(v:number)=>{const next=Math.max(40,Math.min(300,Math.round(v)));setTempo(next);workstation.setSequenceMeta(Math.max(miniLane.length,bassPattern.steps.length,drumPattern.steps.length,alphaLane.length),next,swing)};
+  const setSwingLive=(v:number)=>{const next=Math.max(0,Math.min(75,Math.round(v)));setSwing(next);workstation.setSequenceMeta(Math.max(miniLane.length,bassPattern.steps.length,drumPattern.steps.length,alphaLane.length),tempo,next)};
   const setCursor=(v:number)=>setSeqCursor((Math.round(v)+16)%16);
 
+  const updateMiniStep=(patch:Partial<WorkstationMiniStep>)=>{const steps=miniLane.map((s,i)=>i===seqCursor?{...s,...patch}:s);setMiniLane(steps);const s=steps[seqCursor];workstation.setMiniStep(seqCursor,s.note,{velocity:s.velocity,gate:s.gate})};
   const updateBassStep=(patch:Partial<typeof bassStep>)=>{const steps=bassPattern.steps.map((s,i)=>i===seqCursor?{...s,...patch}:s);const next={...bassPattern,steps};setBassPattern(next);const s=steps[seqCursor];workstation.setBassStep(seqCursor,s.note,{accent:!!s.accent,slide:!!s.slide,gate:s.gate??.72})};
   const updateDrumStep=(hits:number,accent:number)=>{const steps=drumPattern.steps.map((s,i)=>i===seqCursor?{...s,hits,accent}:s);setDrumPattern({...drumPattern,steps});workstation.setDrumStep(seqCursor,hits,accent)};
+  const updateAlphaStep=(patch:Partial<AlphaLaneStep>)=>{const steps=alphaLane.map((s,i)=>i===seqCursor?{...s,...patch}:s);setAlphaLane(steps);const s=steps[seqCursor];const notes=s.chord>=0?ALPHA_CHORDS[s.chord%ALPHA_CHORDS.length]:[-1,-1,-1,-1];workstation.setAlphaStep(seqCursor,notes,{velocity:s.velocity,gate:s.gate})};
   const updateDrumVoice=(voice:number,patch:Partial<DrumVoiceState>)=>{setDrumKit(kit=>kit.map((v,i)=>i===voice?{...v,...patch}:v))};
 
   const adjustGlobal=async(i:number,d:number)=>{if(globalPage===null||!await ensureAudio())return;const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer'){const n=[...partLevels] as [number,number,number,number];n[i]=Math.max(0,Math.min(1.25,n[i]+d*(fine?.01:.04)));setPartLevels(n);workstation.setPartLevel(i as 0|1|2|3,i===1&&drumMuted?0:n[i])}else if(id==='scene'&&i===0)void loadScene(sceneIndex+d);else if(id==='clock'&&i===0)setTempoLive(tempo+d);else if(id==='clock'&&i===1)setSwingLive(swing+d);else if(id==='fx'&&i===3){const v=Math.max(0,Math.min(1.2,master+d*(fine?.01:.04)));setMaster(v);workstation.setMaster(v)}};
 
   const adjust=async(i:number,d:number)=>{
     if(globalPage!==null){await adjustGlobal(i,d);return}if(!await ensureAudio())return;const scale=fine?.25:1;
-    if(partId==='mini'&&page.id==='seq'){if(i===0)setTempoLive(tempo+d);else if(i===1)setSwingLive(swing+d);else if(i===2)void loadScene(sceneIndex+d);else if(i===3)toggleTransport();return}
+    if(partId==='mini'&&page.id==='seq'){if(i===0)setCursor(seqCursor+d);else if(i===1)updateMiniStep({note:Math.max(-1,Math.min(127,miniStep.note+d))});else if(i===2)updateMiniStep({gate:Math.max(.05,Math.min(4,miniStep.gate+d*.05*scale))});else if(i===3)toggleTransport();return}
     if(partId==='drum808'){
       if(page.id==='kit'){if(i===0){setDrumVoice((drumVoice+d+8)%8);return}const key=(['','level','tune','decay'] as const)[i];if(!key)return;const current=currentDrum[key];const stepSize=key==='tune'?(drumVoice===0?2:20):key==='level'?.04:.02;const min=key==='tune'?20:key==='level'?0:.02;const max=key==='tune'?14000:key==='level'?1.2:2;const v=Math.max(min,Math.min(max,current+d*stepSize*scale));updateDrumVoice(drumVoice,{[key]:v});workstation.setDrumVoiceParam(drumVoice as Drum808VoiceId,i-1,v);return}
       if(page.id==='tone'){if(i===0){const v=Math.max(0,Math.min(1,currentDrum.tone+d*.04*scale));updateDrumVoice(drumVoice,{tone:v});workstation.setDrumVoiceParam(drumVoice as Drum808VoiceId,3,v)}else if(i===1){const v=Math.max(0,Math.min(1.5,drumAccent+d*.04*scale));setDrumAccent(v);workstation.setDrumGlobalParam(0,v)}else if(i===2){const v=Math.max(.5,Math.min(4,drumDrive+d*.08*scale));setDrumDrive(v);workstation.setDrumGlobalParam(1,v)}else if(i===3)workstation.triggerDrum(drumVoice as Drum808VoiceId,118,true);return}
@@ -163,29 +173,30 @@ export function FM1Workstation(){
       if(page.id==='perf'){if(i===0)setTempoLive(tempo+d);else if(i===1)setSwingLive(swing+d);else if(i===2)void loadScene(sceneIndex+d);else if(i===3)toggleTransport();return}
       if(page.id==='env'&&i===2){const gate=Math.max(.05,Math.min(1,(bassStep.gate??.72)+d*.05*scale));updateBassStep({gate});return}
     }
-    if(partId==='alpha'&&page.id==='seq'){if(i===0){const n=(alphaChord+d+ALPHA_CHORDS.length)%ALPHA_CHORDS.length;if(playing){for(const note of ALPHA_CHORDS[alphaChord])workstation.alphaNoteOff(note);for(const note of ALPHA_CHORDS[n])workstation.alphaNoteOn(note,74)}setAlphaChord(n)}else if(i===1){const v=Math.max(0,Math.min(1.2,(alphaValues[ALPHA_PARAM.level]??.78)+d*.04*scale));setAlphaValues(x=>({...x,[ALPHA_PARAM.level]:v}));workstation.setAlphaParam(ALPHA_PARAM.level,v)}else if(i===2)void loadScene(sceneIndex+d);else if(i===3)toggleTransport();return}
+    if(partId==='alpha'&&page.id==='seq'){if(i===0)setCursor(seqCursor+d);else if(i===1)updateAlphaStep({chord:Math.max(-1,Math.min(ALPHA_CHORDS.length-1,alphaStep.chord+d))});else if(i===2)updateAlphaStep({gate:Math.max(.05,Math.min(4,alphaStep.gate+d*.05*scale))});else if(i===3)toggleTransport();return}
     const b=bindingPage?.[i];if(!b)return;const current=bindingValues[b.id]??b.initial;let v=Math.max(b.min,Math.min(b.max,current+d*b.step*scale));if(b.kind)v=Math.round(v);if(partId==='mini'){setMiniValues(x=>({...x,[b.id]:v}));workstation.setMiniParam(b.id,v)}else if(partId==='bass808'){setBassValues(x=>({...x,[b.id]:v}));workstation.setBassParam(b.id as never,v)}else if(partId==='alpha'){setAlphaValues(x=>({...x,[b.id]:v}));workstation.setAlphaParam(b.id as never,v)}
   };
 
-  const saveSnapshot=()=>{localStorage.setItem('fminimug1.virtual.snapshot',JSON.stringify({sceneIndex,partId,pageIndex,master,octave,tempo,swing,miniValues,bassValues,alphaValues,drumKit,drumVoice,drumAccent,drumDrive,partLevels,bassPattern,drumPattern}));setMessage('Snapshot saved locally')};
-  const loadSnapshot=()=>{try{const raw=localStorage.getItem('fminimug1.virtual.snapshot');if(!raw){setMessage('No local snapshot saved');return}const s=JSON.parse(raw);if(Number.isInteger(s.sceneIndex))setSceneIndex(s.sceneIndex);if(PARTS.includes(s.partId))setPartId(s.partId);if(s.pageIndex)setPageIndex(s.pageIndex);if(typeof s.master==='number')setMaster(s.master);if(typeof s.octave==='number')setOctave(s.octave);if(typeof s.tempo==='number')setTempo(s.tempo);if(typeof s.swing==='number')setSwing(s.swing);if(s.miniValues)setMiniValues(s.miniValues);if(s.bassValues)setBassValues(s.bassValues);if(s.alphaValues)setAlphaValues(s.alphaValues);if(s.drumKit)setDrumKit(s.drumKit);if(Number.isInteger(s.drumVoice))setDrumVoice(s.drumVoice);if(typeof s.drumAccent==='number')setDrumAccent(s.drumAccent);if(typeof s.drumDrive==='number')setDrumDrive(s.drumDrive);if(Array.isArray(s.partLevels))setPartLevels(s.partLevels);if(s.bassPattern)setBassPattern(s.bassPattern);if(s.drumPattern)setDrumPattern(s.drumPattern);syncedRef.current=false;setMessage('Snapshot loaded — touch a control to resync DSP')}catch(error){setMessage(`Snapshot load failed: ${String(error)}`)}};
+  const saveSnapshot=()=>{localStorage.setItem('fminimug1.virtual.snapshot',JSON.stringify({sceneIndex,partId,pageIndex,master,octave,tempo,swing,miniValues,bassValues,alphaValues,drumKit,drumVoice,drumAccent,drumDrive,partLevels,miniLane,bassPattern,drumPattern,alphaLane}));setMessage('Snapshot saved locally')};
+  const loadSnapshot=()=>{try{const raw=localStorage.getItem('fminimug1.virtual.snapshot');if(!raw){setMessage('No local snapshot saved');return}const s=JSON.parse(raw);if(Number.isInteger(s.sceneIndex))setSceneIndex(s.sceneIndex);if(PARTS.includes(s.partId))setPartId(s.partId);if(s.pageIndex)setPageIndex(s.pageIndex);if(typeof s.master==='number')setMaster(s.master);if(typeof s.octave==='number')setOctave(s.octave);if(typeof s.tempo==='number')setTempo(s.tempo);if(typeof s.swing==='number')setSwing(s.swing);if(s.miniValues)setMiniValues(s.miniValues);if(s.bassValues)setBassValues(s.bassValues);if(s.alphaValues)setAlphaValues(s.alphaValues);if(s.drumKit)setDrumKit(s.drumKit);if(Number.isInteger(s.drumVoice))setDrumVoice(s.drumVoice);if(typeof s.drumAccent==='number')setDrumAccent(s.drumAccent);if(typeof s.drumDrive==='number')setDrumDrive(s.drumDrive);if(Array.isArray(s.partLevels))setPartLevels(s.partLevels);if(s.miniLane)setMiniLane(s.miniLane);if(s.bassPattern)setBassPattern(s.bassPattern);if(s.drumPattern)setDrumPattern(s.drumPattern);if(s.alphaLane)setAlphaLane(s.alphaLane);syncedRef.current=false;setMessage('Snapshot loaded — touch a control to resync DSP')}catch(error){setMessage(`Snapshot load failed: ${String(error)}`)}};
 
   const controlValue=(i:number)=>{
     if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer')return partLevels[i].toFixed(2);if(id==='scene')return i===0?scene.name:i===2?'PRESS':i===3?'PRESS':'—';if(id==='clock')return [tempo,swing,'INT','ON'][i]?.toString()??'—';if(id==='fx')return i===3?`${Math.round(master*100)}%`:'N/A'}
-    if(partId==='mini'&&page.id==='seq')return [tempo,swing,sceneIndex+1,playing?'STOP':'PLAY'][i]?.toString()??'—';
+    if(partId==='mini'&&page.id==='seq')return [seqCursor+1,noteName(miniStep.note),`${Math.round(miniStep.gate*100)}%`,playing?'STOP':'PLAY'][i]?.toString()??'—';
     if(partId==='drum808'){if(page.id==='kit')return [DRUM_SHORT[drumVoice],currentDrum.level.toFixed(2),`${Math.round(currentDrum.tune)} Hz`,`${currentDrum.decay.toFixed(2)} s`][i];if(page.id==='tone')return [currentDrum.tone.toFixed(2),drumAccent.toFixed(2),drumDrive.toFixed(2),'HIT'][i];if(page.id==='mix'){const g=[[0],[1],[2,3],[4,5,6,7]][i];return (g.reduce((s,id)=>s+drumKit[id].level,0)/g.length).toFixed(2)}if(page.id==='seq'){const mask=1<<drumVoice;return [seqCursor+1,(drumStep.hits&mask)?'ON':'OFF',(drumStep.accent&mask)?'ON':'OFF',DRUM_SHORT[drumVoice]][i]?.toString()??'—'}if(page.id==='perf')return [swing,'FILL',drumMuted?'MUTED':'ON',sceneIndex+1][i]?.toString()??'—'}
-    if(partId==='bass808'){if(page.id==='seq')return [seqCursor+1,bassStep.note<0?'REST':`${NOTE_NAMES[(bassStep.note+120)%12]}${Math.floor(bassStep.note/12)-1}`,bassStep.accent?'ON':'OFF',bassStep.slide?'ON':'OFF'][i]?.toString()??'—';if(page.id==='perf')return [tempo,swing,sceneIndex+1,playing?'STOP':'PLAY'][i]?.toString()??'—';if(page.id==='env'&&i===2)return `${Math.round((bassStep.gate??.72)*100)}%`}
-    if(partId==='alpha'&&page.id==='seq')return [`CH${alphaChord+1}`,(alphaValues[ALPHA_PARAM.level]??.78).toFixed(2),sceneIndex+1,playing?'STOP':'PLAY'][i]?.toString()??'—';
+    if(partId==='bass808'){if(page.id==='seq')return [seqCursor+1,noteName(bassStep.note),bassStep.accent?'ON':'OFF',bassStep.slide?'ON':'OFF'][i]?.toString()??'—';if(page.id==='perf')return [tempo,swing,sceneIndex+1,playing?'STOP':'PLAY'][i]?.toString()??'—';if(page.id==='env'&&i===2)return `${Math.round((bassStep.gate??.72)*100)}%`}
+    if(partId==='alpha'&&page.id==='seq')return [seqCursor+1,alphaStep.chord<0?'REST':`CH${alphaStep.chord+1}`,`${Math.round(alphaStep.gate*100)}%`,playing?'STOP':'PLAY'][i]?.toString()??'—';
     const b=bindingPage?.[i]??null;return pretty(b,b?bindingValues[b.id]:undefined)
   };
-  const controlRatio=(i:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer')return partLevels[i]/1.25;if(id==='scene'&&i===0)return sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1);if(id==='clock'&&i===0)return (tempo-40)/260;if(id==='clock'&&i===1)return swing/75;if(id==='fx'&&i===3)return master/1.2;return .5}if(partId==='mini'&&page.id==='seq')return [(tempo-40)/260,swing/75,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1),playing?1:0][i];if(partId==='drum808'){if(page.id==='kit')return [drumVoice/7,currentDrum.level/1.2,Math.min(1,currentDrum.tune/14000),Math.min(1,currentDrum.decay/2)][i];if(page.id==='tone')return [currentDrum.tone,drumAccent/1.5,(drumDrive-.5)/3.5,.5][i];if(page.id==='seq')return [seqCursor/15,(drumStep.hits&(1<<drumVoice))?1:0,(drumStep.accent&(1<<drumVoice))?1:0,drumVoice/7][i];if(page.id==='perf')return [swing/75,.5,drumMuted?1:0,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1)][i]}if(partId==='bass808'){if(page.id==='seq')return [seqCursor/15,Math.max(0,bassStep.note)/127,bassStep.accent?1:0,bassStep.slide?1:0][i];if(page.id==='perf')return [(tempo-40)/260,swing/75,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1),playing?1:0][i];if(page.id==='env'&&i===2)return bassStep.gate??.72}if(partId==='alpha'&&page.id==='seq')return [alphaChord/(ALPHA_CHORDS.length-1),(alphaValues[ALPHA_PARAM.level]??.78)/1.2,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1),playing?1:0][i];const b=bindingPage?.[i]??null;return ratio(b,b?bindingValues[b.id]:undefined)};
+  const controlRatio=(i:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer')return partLevels[i]/1.25;if(id==='scene'&&i===0)return sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1);if(id==='clock'&&i===0)return (tempo-40)/260;if(id==='clock'&&i===1)return swing/75;if(id==='fx'&&i===3)return master/1.2;return .5}if(partId==='mini'&&page.id==='seq')return [seqCursor/15,Math.max(0,miniStep.note)/127,miniStep.gate/4,playing?1:0][i];if(partId==='drum808'){if(page.id==='kit')return [drumVoice/7,currentDrum.level/1.2,Math.min(1,currentDrum.tune/14000),Math.min(1,currentDrum.decay/2)][i];if(page.id==='tone')return [currentDrum.tone,drumAccent/1.5,(drumDrive-.5)/3.5,.5][i];if(page.id==='seq')return [seqCursor/15,(drumStep.hits&(1<<drumVoice))?1:0,(drumStep.accent&(1<<drumVoice))?1:0,drumVoice/7][i];if(page.id==='perf')return [swing/75,.5,drumMuted?1:0,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1)][i]}if(partId==='bass808'){if(page.id==='seq')return [seqCursor/15,Math.max(0,bassStep.note)/127,bassStep.accent?1:0,bassStep.slide?1:0][i];if(page.id==='perf')return [(tempo-40)/260,swing/75,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1),playing?1:0][i];if(page.id==='env'&&i===2)return bassStep.gate??.72}if(partId==='alpha'&&page.id==='seq')return [seqCursor/15,alphaStep.chord<0?0:(alphaStep.chord+1)/ALPHA_CHORDS.length,alphaStep.gate/4,playing?1:0][i];const b=bindingPage?.[i]??null;return ratio(b,b?bindingValues[b.id]:undefined)};
   const available=(i:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;return id==='mixer'||(id==='scene'&&(i===0||i===2||i===3))||(id==='clock'&&(i===0||i===1))||(id==='fx'&&i===3)}if(partId==='drum808')return true;if(partId==='mini'&&page.id==='seq')return true;if(partId==='bass808'&&(page.id==='seq'||page.id==='perf'||(page.id==='env'&&i===2)))return true;if(partId==='alpha'&&page.id==='seq')return true;return !!bindingPage?.[i]};
   const pressControl=(i:number)=>{if(globalPage!==null&&WORKSTATION_GLOBAL_PAGES[globalPage].id==='scene'){if(i===2)saveSnapshot();if(i===3)loadSnapshot();return}const label=visiblePage.params[i];if(label==='PLAY')toggleTransport();else if(label==='TRIGGER')workstation.triggerDrum(drumVoice as Drum808VoiceId,118,true);else if(label==='FILL')[0,1,2,4].forEach(v=>workstation.triggerDrum(v as Drum808VoiceId,120,true));else if(label==='HIT'||label==='ACCENT'||label==='SLIDE')void adjust(i,1)};
 
   const functionButton=(label:string)=>{if(label==='SEL')cyclePart();else if(label==='HOME'){setGlobalPage(null);setPageIndex(p=>({...p,[partId]:0}))}else if(label==='ENV')jumpPage('env');else if(label==='LFO')jumpPage(partId==='alpha'?'lfo':'mod');else if(label==='SEQ')jumpPage('seq');else if(label==='ARP')jumpPage('perf');else if(label==='PLAY/STOP')toggleTransport();else if(label==='FX')setGlobalPage(1);else if(label==='GLO')setGlobalPage(globalPage===null?0:null);else if(label==='EDIT')setFine(v=>!v);else if(label==='SAVE')saveSnapshot()};
   const keys=Array.from({length:27},(_,i)=>53+i+octave*12);
   const displayParams=visiblePage.params;
-  const stepStrip=(partId==='bass808'||partId==='drum808')&&(page.id==='seq'||page.id==='perf');
+  const stepStrip=page.id==='seq'&&globalPage===null;
+  const stepActive=(i:number)=>partId==='mini'?miniLane[i%miniLane.length].note>=0:partId==='bass808'?bassPattern.steps[i%bassPattern.steps.length].note>=0:partId==='drum808'?drumPattern.steps[i%drumPattern.steps.length].hits!==0:alphaLane[i%alphaLane.length].chord>=0;
 
   return <main className="fm1Stage">
     <div className="fm1Title"><strong>FMiniMug1 WORKSTATION V2</strong><span>VIRTUAL FM-1 · native WASM · {audioState.toUpperCase()}</span></div>
@@ -203,7 +214,7 @@ export function FM1Workstation(){
           <div className="displayScene">{scene.name}<small>{tempo} BPM · {swing}% SWING · PEAK {(peak*100).toFixed(0)}% · OCT {octave>=0?'+':''}{octave}</small></div>
           <div className="displayPage"><strong>{visiblePage.title}</strong><span>{fine?'FINE':'NORMAL'}</span></div>
           <div className="displayParams">{displayParams.map((name,i)=><div key={`${name}-${i}`} className={available(i)?'':'unavailable'}><small>K{i+1}</small><b>{name}</b><em>{available(i)?controlValue(i):'N/A'}</em></div>)}</div>
-          {stepStrip&&<div className="displaySteps">{Array.from({length:16},(_,i)=>{const active=partId==='bass808'?bassPattern.steps[i%bassPattern.steps.length].note>=0:drumPattern.steps[i%drumPattern.steps.length].hits!==0;return <span key={i} className={`${active?'on':''} ${i===seqCursor?'cursor':''} ${playing&&i===step?'play':''}`}>{i+1}</span>})}</div>}
+          {stepStrip&&<div className="displaySteps">{Array.from({length:16},(_,i)=><span key={i} className={`${stepActive(i)?'on':''} ${i===seqCursor?'cursor':''} ${playing&&i===step?'play':''}`}>{i+1}</span>)}</div>}
           <div className="displayFooter"><span className={partId==='mini'?'selected':''}>MINI</span><span className={partId==='drum808'?'selected':''}>808D</span><span className={partId==='bass808'?'selected':''}>808B</span><span className={partId==='alpha'?'selected':''}>ALPHA</span></div>
         </div></div>
         <div className="fm1RightControls"><div className="fm1KnobRow">{displayParams.map((name,i)=><HardwareKnob key={`${name}-${i}`} label={`KNOB${i+1}`} value={available(i)?controlValue(i):'N/A'} normalized={controlRatio(i)} disabled={!available(i)} onDelta={d=>void adjust(i,d)} onPress={()=>pressControl(i)}/>)}</div><div className="fm1FunctionGrid">{['FX','SEL','ENV','LFO','EDIT','GLO','HOME','SAVE','ARP','SEQ','PLAY/STOP','REC'].map(label=>{const disabled=label==='REC';const active=(label==='PLAY/STOP'&&playing)||(label==='EDIT'&&fine)||(label==='GLO'&&globalPage!==null);return <button key={label} disabled={disabled} className={active?'active':disabled?'disabled':''} title={disabled?'Recording is not implemented yet':''} onClick={()=>functionButton(label)}>{label}</button>})}</div></div>
@@ -211,7 +222,7 @@ export function FM1Workstation(){
       <div className="fm1UpperPads">{['OP1','OP2','OP3','OP4','OP5','OP6','P1','GLO','MONO','POLY'].map((x,i)=><button key={x} className={i<4&&PARTS[i]===partId?'active':''} onClick={()=>{if(i<4)changePart(PARTS[i]);else if(x==='P1')void loadScene(sceneIndex+1);else if(x==='GLO')setGlobalPage(globalPage===null?0:null);else if(x==='MONO')changePart('mini');else if(x==='POLY')changePart('alpha')}}>{x}<span>{i<4?WORKSTATION_PARTS[i].title:''}</span></button>)}</div>
       <div className="fm1Keybed">{keys.map((note,i)=><button key={`${note}-${i}`} className={held.includes(note)?'held':''} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);void triggerSource(`ptr:${e.pointerId}`,note,i)}} onPointerUp={e=>{e.preventDefault();releaseSource(`ptr:${e.pointerId}`)}} onPointerCancel={e=>releaseSource(`ptr:${e.pointerId}`)}><i/><small>{partId==='drum808'?DRUM_SHORT[i%8]:`${NOTE_NAMES[note%12]}${Math.floor(note/12)-1}`}</small><kbd>{COMPUTER_KEYS[i]?.replace('Key','').replace('Digit','')??''}</kbd></button>)}</div>
     </section>
-    <section className="fm1Status"><span><b>PC KEYS</b> Z/S/X/D/C… + Q/2/W/3/E… play the selected part</span><span><b>ENCODERS</b> drag/wheel to turn, click to press; EDIT = fine mode</span><span><b>SEQ</b> Bass/Drum steps edit the native sample-clock sequence live</span><span><b>OCT− / OCT+</b> change keyboard octave</span></section>
+    <section className="fm1Status"><span><b>PC KEYS</b> Z/S/X/D/C… + Q/2/W/3/E… play the selected part</span><span><b>ENCODERS</b> drag/wheel to turn, click to press; EDIT = fine mode</span><span><b>SEQ</b> all four parts now edit the native sample-clock lanes</span><span><b>OCT− / OCT+</b> change keyboard octave</span></section>
     {message&&<div className={audioState==='error'?'fm1Message error':'fm1Message'}>{message}{audioState==='error'&&<button onClick={()=>void ensureAudio()}>RETRY AUDIO</button>}</div>}
   </main>;
 }
