@@ -35,7 +35,9 @@ void fmd808_trigger(fmd808_t *d,fmd808_voice_id_t id,uint8_t velocity,uint8_t ac
 }
 
 float fmd808_process(fmd808_t *d){
-  if(!d)return 0.0f;const float sr=d->sample_rate;float out=0.0f;
+  if(!d)return 0.0f;
+  const float sr=d->sample_rate;
+  float out=0.0f;
 
   /* Bass drum: resonant body with fast pitch drop and a tiny attack tick. */
   {
