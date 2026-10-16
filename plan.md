@@ -1,268 +1,266 @@
-# FMiniMug1 Implementation Plan
+# FMiniMug1 Workstation Plan
 
-## Vision
-Build a performance-first, Minimoog-inspired synthesizer for the M-VAVE FM-1 that preserves the classic three-oscillator/ladder character while growing into a modern compact performance workstation with scenes, layered synth voices, expressive sequencing, drums and effects.
+## Product vision
 
-## Milestone 0 — Foundation ✅
-- [x] Define product scope and legal/trademark boundaries.
-- [x] Define 6-page hardware UI model shared with the web app.
-- [x] Define original preset and sequence schemas.
-- [x] Create browser controller/emulator application shell.
-- [x] Add Web MIDI transport abstraction.
-- [x] Add native firmware engine API and DSP module boundaries.
-- [x] Document Felucca-compatible installer/build integration strategy.
+Build a compact four-part performance workstation for the M-VAVE FM-1 around four distinct classic-inspired instruments:
 
-## Milestone 1 — Browser reference synth 🚧
-- [x] Three oscillator Web Audio fallback voice.
-- [x] Mixer, noise source, drive and feedback fallback approximation.
-- [x] Resonant 4-pole low-pass fallback approximation.
-- [x] Independent filter and loudness contours in the canonical native/WASM engine.
-- [x] Glide/legato behavior.
-- [x] Selectable constant-time / constant-rate glide in native/WASM engine and controller.
-- [x] Classic decay-linked release switches for loudness and filter contours.
-- [x] Low/high/last monophonic note priority with held-key fallback.
-- [x] On-screen keyboard and PC keyboard performance with note-specific release.
-- [x] Factory patch browser.
-- [x] Sequence browser + step playback.
-- [x] Native `fm_voice.c` DSP compiled to WebAssembly.
-- [x] AudioWorklet renders the native oscillator/mixer/ladder engine in 128-sample blocks.
-- [x] Native `fm_seq.c` sequencer runs on the audio sample clock in WASM mode instead of JavaScript timers.
-- [x] Browser step grid and DSP monitor follow the native current sequence step.
-- [x] Web Audio remains only as a graceful fallback if WASM/AudioWorklet is unavailable.
-- [x] Oscilloscope + spectrum + peak/RMS diagnostics with active-engine indicator.
-- [x] Correct fallback sequence transport to 16th-note timing and add swing/rest/transpose handling.
-- [ ] Golden-render audio regression tests for every factory patch.
-- [ ] Browser automation curves for smooth live controller parameter changes.
+1. **MINI** — the existing three-oscillator / ladder monophonic synth. Keep exactly one instance and preserve its character.
+2. **808 DRUM** — an original analog drum-machine engine inspired by classic 808-style synthesis and sequencing.
+3. **808 BASS** — an original acid/bassline monosynth with accent and slide behavior.
+4. **ALPHA** — an original six-voice DCO/VCF/VCA poly synth inspired by Alpha-Juno-era architecture and performance controls.
 
-## Milestone 2 — 240×240 FM-1 UI 🚧
-- [x] Define portable `fm1_platform.h` boundary for display/input/audio/LED/flash/MIDI.
-- [x] Implement portable six-page 240×240 renderer/state machine.
-- [x] OSC page parameter mapping.
-- [x] MIX page parameter mapping.
-- [x] FILTER page parameter mapping.
-- [x] CONTOUR page parameter mapping.
-- [x] MOD page parameter mapping.
-- [x] SEQ/PERF page transport/preset/pattern/tempo mapping.
-- [x] FOCUS mode: one large parameter + encoder fine mode.
-- [x] HOLD fine/secondary adjustment layer.
-- [x] HOLD oscillator range selectors (32'/16'/8'/4'/2').
-- [x] HOLD filter contour editing independent from loudness contour.
-- [x] HOLD note-priority and retrigger controls on MOD.
-- [x] HOLD+OSC encoder-4 press switches glide TIME/RATE.
-- [x] HOLD+CONTOUR encoder presses switch filter/loudness decay-linked release.
-- [x] Host UI interaction tests with fake FM-1 platform.
-- [x] Add compact live cutoff/resonance response graph to FILTER.
-- [x] Add compact loudness/filter ADSR contour graph to CONTOUR including linked-release visualization.
-- [x] Generate browser/C parameter IDs from one shared manifest so mappings cannot drift.
-- [x] Implement Felucca-compatible display/input/time/audio/LED adapter behind `fm1_platform.h`.
-- [x] Add raw 27-key / 14-button / 7-encoder hardware diagnostic screen.
-- [x] Add compile-time semantic control-map gate so normal synth mode cannot use assumed raw IDs.
-- [x] Add host behavior tests for raw/mapped Felucca input, LEDs, ALNK rendering, timing budget and disabled flash writes.
-- [x] Add 16-step viewport over native 1–64-step patterns with stopped-page browsing and playhead-follow scrolling.
-- [x] Show rest/note cells plus accent/tie/slide markers in the 240×240 SEQ/PERF viewport.
-- [ ] Complete HOLD shortcuts for oscillator waveform assignment and remaining performance actions.
-- [ ] Verify physical encoder/button IDs on a real FM-1 diagnostic screen.
+The goal is not to clone Roland or Moog branding, artwork, ROMs, presets or exact trade dress. The implementation uses original DSP, UI graphics, presets and patterns while adopting familiar synthesis concepts.
 
-## Milestone 3 — Native DSP engine 🚧
-- [x] PolyBLEP band-limited saw/pulse/square oscillators.
-- [x] Triangle generated by integrating the corrected square wave.
-- [x] Oscillator 1/2/3 range switches with 32'/16'/8'/4'/2' octave behavior.
-- [x] OSC3 keyboard-control off + LO modulation mode in native engine.
-- [x] Nonlinear mixer with per-oscillator gain, soft saturation and feedback path.
-- [x] Initial four-stage nonlinear ladder-style filter.
-- [ ] Compare/calibrate Huovilainen-style vs stricter ZDF ladder implementations with reference renders.
-- [x] Optional 2× oversampling of oscillator/mixer/filter path.
-- [ ] Measure 2× oversampling CPU budget on the real FM-1 target.
-- [x] Initial resonance bass compensation and bounded high-resonance stress test.
-- [ ] Calibrate self-oscillation pitch/amplitude near maximum emphasis.
-- [x] Filter keyboard tracking off / 1⁄3 / 2⁄3 / full variants.
-- [x] Separate filter and loudness ADSR parameter sets and explicit envelope stages.
-- [x] Add classic decay-linked release switches on top of the separate contours.
-- [x] Single-trigger legato vs selected-note retrigger mode.
-- [x] Low/high/last held-note priority modes with fallback when the active key is released.
-- [x] Glide constant-time/constant-rate options without adding real-time libm calls.
-- [x] Deterministic analog drift foundation.
-- [ ] Extend analog model with component spread, calibration error and filter asymmetry.
-- [x] Remove direct `libm` dependency from the real-time DSP path.
-- [x] Link the float DSP against the actual pi32v2 `libcompiler-rt.a` soft-float runtime.
-- [x] Host finite/bounded-output stress tests.
-- [x] Host octave-range, dual-contour, retrigger, ADSR-stage, decay-switch, glide-mode and held-note-priority tests.
-- [ ] CPU budget and golden render tests.
+## Non-negotiable architecture rules
 
-## Milestone 4 — Presets and sequences 🚧
-- [x] 32 original factory patches across bass, lead, brass, keys, sequences, SFX, drones and percussion.
-- [x] 12 demonstration/performance sequences.
-- [x] Add 8 original Studio 2.0 demo patches for bass/lead/pluck/brass/texture/utility testing.
-- [x] Add 8 expressive Studio 2.0 patterns including swing, rests, velocity, transpose and accent/tie/slide data.
-- [x] Portable 1–64 step sample-clock sequencer core.
-- [x] Per-step gate, velocity, transpose and accent/tie/slide flags in the native sequence model.
-- [x] Pair-preserving swing timing and tie-to-rest release behavior.
-- [x] Browser sends expressive sequence fields into the native WASM sequencer.
-- [ ] Expand to 64+ original factory presets.
-- [ ] Expand to 32+ sequences: Berlin, funk, prog, electro, soundtrack, educational oscillator/filter demos.
-- [ ] User preset slots in flash.
-- [ ] User sequence slots in flash.
-- [ ] Import/export JSON through browser controller.
-- [ ] MIDI program-change mapping.
+- Hardware and virtual mode use the **same instrument/page/parameter model** generated from `shared/workstation.json`.
+- Every normal page exposes exactly four primary controls because the FM-1 has four main encoders.
+- The 240×240 hardware renderer is the reference layout. The browser shows the same screen/pages plus optional surrounding diagnostics/editor chrome.
+- WASM uses the same native C DSP/state/transport code as hardware wherever practical. WebAudio fallbacks are development-only.
+- One shared transport clock drives MINI sequence, 808 DRUM, 808 BASS and ALPHA sequence/arpeggio lanes.
+- Scenes store all four parts, mixer, global FX, tempo/swing and pattern assignments atomically.
+- Preserve the proven diagnostic-first FM-1 bring-up and never generate a flashable `.fwsc` until real-device/recovery gates are passed.
 
-## Milestone 5 — MIDI / controller protocol
-- [x] Reserve manufacturer-neutral SysEx development namespace format in web layer.
-- [x] Append-only generated parameter protocol through v4; existing IDs 0–31 remain stable.
-- [x] Add protocol IDs for loudness/filter decay switches and glide mode.
-- [ ] Finalize controller protocol only after native MIDI/SysEx parser exists.
-- [ ] Full patch dump/request.
-- [ ] Parameter delta updates over hardware MIDI.
-- [ ] Sequence dump/request.
-- [ ] Transport start/stop/clock.
-- [ ] Note input through USB and TRS MIDI.
-- [ ] MIDI learn for performance macros.
-- [ ] Browser live sync with connected hardware.
+## Inspiration from Melodee
 
-## Milestone 6 — Installer / packaging
-- [x] Document Felucca HAL/boot/package port order and safety gates in `docs/FELUCCA_PORT.md`.
-- [x] Produce a reproducible **non-installable** diagnostic app image with the real JieLi toolchain.
-- [x] Refuse `.fwsc` generation in target CI until real-device/recovery gates are complete.
-- [ ] Reuse or adapt the proven Felucca `.fwsc` packaging path with GPL compliance after hardware bring-up.
-- [ ] Device identity and package-size validation before erase/write.
-- [ ] Web MIDI installer in Chrome/Edge.
-- [ ] CLI installer.
-- [ ] Return-to-official-V15 workflow.
-- [ ] Recovery guide using FM-1-transporter for non-booting hardware.
-- [ ] SHA-256 manifests for every release.
-- [ ] Refuse unknown FM-1 firmware identities by default.
+Use `keremimo/melodee` as a workflow/reference source, not as a code/UI copy. Adopt these architectural ideas:
 
-## Milestone 7 — Browser emulator parity 🚧
-- [x] Compile the native DSP core to WASM as the canonical browser sound engine.
-- [x] Run the WASM engine inside an AudioWorklet instead of the UI thread.
-- [x] Run the native portable sequencer in that same AudioWorklet/sample clock.
-- [x] Route overlapping keyboard note-on/note-off events into the native held-note priority engine.
-- [x] Expose classic oscillator ranges, dual contours, retrigger and note priority in the controller.
-- [x] Expose decay-linked release switches and TIME/RATE glide in the controller.
-- [x] Keep a clearly indicated Web Audio/timer fallback for unsupported/development environments.
-- [x] CI builds and verifies the generated WASM/worklet assets.
-- [x] Add Studio Scene selector that instantly loads a playable Synth-A patch + expressive pattern.
-- [x] Show future Synth-B/drum/FX/macro targets alongside each scene for regression planning.
-- [ ] Compile the native 240×240 UI renderer to WASM/canvas for pixel-identical hardware preview.
-- [ ] Persist presets/sequences/settings in IndexedDB/local storage.
-- [ ] Simulated physical buttons/encoders around the 240×240 screen.
-- [ ] MIDI keyboard input.
-- [ ] Audio/MIDI recorder and WAV export.
-- [ ] Preset A/B compare.
+- track/part-centric selection;
+- descriptor-driven pages and parameter metadata;
+- one protocol/state model for hardware and editor;
+- live editor updates without forcing page selection changes;
+- sequencer steps that can carry note/rest, accent, slide, probability and motion;
+- device capability/version discovery rather than hard-coded editor assumptions;
+- compact hardware interaction with a richer browser view over the same state.
 
-## Milestone 8 — QA / release 🚧
-- [x] Host DSP stability tests.
-- [x] Host sequencer timing/swing/tie tests.
-- [x] Host UI interaction/mapping tests including 64-step viewport paging/follow behavior.
-- [x] Host Felucca platform-adapter behavior tests.
-- [x] Compile-check browser native-DSP/sequencer ABI in CI.
-- [x] CI verifies generated browser/native parameter protocol files are synchronized.
-- [x] Production web + WASM build in CI.
-- [x] Real JieLi pi32v2 diagnostic compile/link in CI against pinned Felucca 1.6.1 HAL.
-- [x] Real JieLi pi32v2 full-synth compile/link in CI using a synthetic, explicitly non-hardware control map.
-- [x] Validate target `_start`, XIP bounds, BSS bounds, no chip-ROM references, hashes and no `.fwsc` output.
-- [ ] Golden audio render regression suite.
-- [ ] UI clipping/overlap snapshot tests at 240×240.
-- [ ] Web unit tests.
-- [ ] Real-device display/input diagnostic smoke test.
-- [ ] Real-device audio timing/underrun smoke test.
-- [ ] Real-device verified semantic control map.
-- [ ] Beta release only after installer/recovery path has been verified on hardware.
+Do not copy Melodee assets, fonts, visual trade dress or substantial source code.
 
-## Milestone 9 — Studio 2.0 modern expansion 🚧
+## Milestone A — Existing MINI foundation ✅ / maintenance
 
-The detailed architecture and demo matrix live in `docs/STUDIO_2_0.md`.
+- [x] Native three-oscillator Mini-style voice.
+- [x] PolyBLEP saw/pulse/square and integrated triangle.
+- [x] Ladder-style nonlinear filter, drive, feedback and drift.
+- [x] Independent filter/loudness contours.
+- [x] Classic oscillator ranges, glide modes, decay-link switches.
+- [x] Mono priority/retrigger/legato behavior.
+- [x] Native sequencer and WASM AudioWorklet integration.
+- [x] 240×240 native UI and Felucca target adapter.
+- [x] Raw input and audio-budget diagnostics.
+- [x] Real JieLi compile/link CI with flash writes disabled.
+- [ ] Keep MINI as one instance only; remove dual-MINI roadmap and transitional Synth-B feature after replacement engines are usable.
+- [ ] Final filter/reference calibration and golden audio tests.
 
-### Scene/test foundation
-- [x] Add 8 Studio 2.0 demo scenes.
-- [x] Add 4 analog-drum pattern blueprints used as future regression material.
-- [x] Scene definitions include Synth A, planned Synth B, drums, delay/reverb character and four macro names.
-- [x] Keep every scene anchored to the classic FMiniMug oscillator/mixer/ladder vocabulary.
-- [ ] Canonical persistent scene schema shared by browser and native firmware.
+## Milestone B — Canonical workstation UI/state 🚧
 
-### Dual synth / performance modes
-- [ ] Add independent Synth A + Synth B native voice instances.
-- [ ] Add mixer with A/B level and balance.
-- [ ] SINGLE / LAYER / SPLIT / DUO / UNISON / SEQ-A + LIVE-B modes.
-- [ ] Restore both synth engines atomically from a Scene.
-- [ ] Define a real-device CPU-quality budget for two simultaneous voices.
+Source of truth: `shared/workstation.json`.
 
-### Sequencer 2.0
-- [ ] True dedicated slide-time behavior without envelope retrigger.
-- [ ] Accent routing to amp/filter/drive.
-- [ ] Per-step parameter locks.
-- [ ] Four motion-recording lanes.
-- [ ] Probability / conditional trig / ratchet / micro-timing.
-- [ ] Pattern chain / song mode.
+- [x] Define four parts: MINI / 808 DRUM / 808 BASS / ALPHA.
+- [x] Define hardware-safe four-control pages for every part.
+- [x] Add generator producing native C and TypeScript descriptors.
+- [ ] CI-regenerate descriptors and fail on drift.
+- [ ] Native top-level part selector shared by hardware and virtual renderer.
+- [ ] Shared page index/focus/HOLD state per part.
+- [ ] Global pages: MIXER / FX / SCENE / CLOCK.
+- [ ] Compile the native 240×240 renderer to WASM/canvas for pixel-identical preview.
+- [ ] Browser surrounds the native screen with simulated FM-1 buttons/encoders.
+- [ ] Browser full editor reads the same descriptor/state model instead of maintaining separate page definitions.
 
-### Drum engine
-- [ ] 8 compact analog-style voices: BD, SD, CH, OH, CLAP, TOM, PERC, NOISE/FX.
-- [ ] Route drum drive/filter character through FMiniMug-style nonlinear stages where useful.
-- [ ] Make current demo drum blueprints directly playable.
-
-### FX and character
-- [ ] Per-synth insert FX.
-- [ ] Send A delay: stereo/ping-pong/tape/BBD/multi-tap.
-- [ ] Send B reverb: room/plate/spring/hall/dark-space.
-- [ ] Master saturation/compression/tilt-EQ/limiter/width.
-- [ ] Character modes CLEAN / CLASSIC / AGED / HOT / BROKEN.
-
-### Modulation / performance
-- [ ] LFO1 classic + LFO2 modern/sync/random/step.
-- [ ] 8-slot modulation matrix.
-- [ ] Four performance macros per patch/scene.
-- [ ] A/B morph, later four-corner XY morph.
-- [ ] Scale lock, chord memory and arpeggiator.
-- [ ] Three-note paraphonic mode using OSC1/2/3 into the common ladder path.
-
-### Sample / loop layer
-- [ ] Optional sample oscillator/source through classic mixer/filter/contours.
-- [ ] start/end/tune/loop/reverse/root-note controls.
-- [ ] Simple performance looper only after dual synth, drums and FX timing are stable.
-
-## Current real-target build facts
-
-Pinned Felucca HAL revision: `a53ecf428c29c780108fd70a31b71a32a6b5c313` (Felucca 1.6.1).
-
-- Diagnostic image: `_start=0x02000120`, raw control map, flash writes disabled.
-- Audio-check image: autonomous ALNK/DSP timing diagnostic, flash writes disabled.
-- Full synth link check: `_start=0x02000120`, pi32v2 `libcompiler-rt.a`, synthetic control map, flash writes disabled.
-- Target CI verifies XIP/image bounds, BSS, entry stub, SHA-256 manifests, absence of chip-ROM references and absence of `.fwsc` output.
-- All target images are CI verification artifacts only. They are **not declared safe to flash** and are not packaged as `.fwsc`.
-
-## FM-1 control concept
-
-### Current normal layer
-- Encoder 1–4: four highlighted page parameters.
-- Left/right page buttons: previous/next panel section.
-- Keyboard: notes / sequence transpose.
-- Play: sequencer start/stop.
-- Pattern: sequence selection.
-- Preset: factory/user patch selection.
-
-### Future Studio 2.0 top level
+### Hardware interaction target
 
 ```text
-SYNTH A | SYNTH B | DRUM | SEQ | FX | PERF
+PART: MINI | DRUM | BASS | ALPHA | GLOBAL
+PAGE LEFT/RIGHT: page inside selected part
+ENC 1..4: four visible parameters
+ENC PRESS: focus/alternate action
+HOLD: secondary layer
+PLAY: global transport
+PATTERN: pattern browser for selected part
+PRESET: sound/kit preset browser for selected part
 ```
 
-The four-encoder + HOLD + FOCUS interaction model remains. Complexity should move behind pages/scenes/macros rather than turning the 240×240 screen into a miniature DAW.
+The virtual FM-1 must expose the same controls in the same positions and invoke the same state transitions.
 
-### HOLD layer
-- OSC: encoder 1–3 select 32'/16'/8'/4'/2'; encoder 4 rotates glide amount and press switches TIME/RATE mode.
-- CONTOUR: encoder 1–4 edit the filter contour while the normal layer edits loudness contour; HOLD+encoder 2 press toggles filter decay-link, HOLD+encoder 3 press toggles loudness decay-link.
-- MOD: encoder 1 chooses LOW/HIGH/LAST note priority; encoder 4 switches single-trigger/retrigger.
-- Future Hold + keyboard: instant waveform assignments and performance macros.
-- Future Hold + Play: tap tempo / clock source.
-- Future Hold + Preset: save/copy/compare.
-- Future Hold + Pattern: step record / clear / duplicate.
+## Milestone C — 808 DRUM engine
 
-### FOCUS mode
-Press an encoder to zoom one parameter to nearly full screen, show its graph/value/history and use the keyboard for coarse presets/ranges while the encoder provides fine control.
+Original synthesis, no samples required for core voices.
 
-## Preset policy
-Factory patches, patterns, demo scenes and drum blueprints are original FMiniMug1 data inspired by recognizable analog sound/production categories. Do not copy proprietary preset books, commercial banks, factory demo sequences, artwork, logos or patch sheets verbatim.
+Target voices:
 
-## Felucca integration notes
-Felucca is the proven low-level FM-1 reference for `.fwsc` packaging, Web MIDI installation, flash persistence, USB audio/MIDI, ALNK0/I2S audio, the ST7789-class 240×240 display, and the FM-1's 11×6 input matrix with 27 note keys, 14 buttons and seven encoders. FMiniMug1 keeps these details behind `fm1_platform.h`; see `docs/FELUCCA_PORT.md` and `docs/FELUCCA_TARGET_CONTRACT.md` for the port map and safe bring-up order.
+- [ ] Bass Drum — pitch sweep, tune, decay, tone/drive.
+- [ ] Snare — body oscillators + filtered noise/snappy component.
+- [ ] Low/Mid/High Tom / Conga family.
+- [ ] Rim / claves.
+- [ ] Clap — multi-burst noise envelope.
+- [ ] Cowbell — dual pulse/square metallic source.
+- [ ] Closed Hat / Open Hat — metallic oscillator/noise network with separate decays.
+- [ ] Cymbal — metallic source + band/high-pass shaping.
+- [ ] Per-voice level/accent response.
+- [ ] 16/32-step drum grid with per-lane hits and accent.
+- [ ] Flam, probability and per-step variation where CPU permits.
+- [ ] Mute/solo and performance fill.
+- [ ] Original factory kits and immediately useful demo patterns.
+- [ ] Native/WASM golden render tests for representative voices.
 
-The first real-device target remains deliberately read-only with respect to flash: display, input diagnostics and audio timing verification come before any package/erase/write path.
+Hardware pages from canonical manifest:
+
+```text
+KIT  : VOICE / LEVEL / TUNE / DECAY
+TONE : TONE / SNAPPY / ATTACK / COLOR
+MIX  : BD / SD / HATS / PERC
+SEQ  : STEP / ACCENT / FLAM / PROB
+PERF : SWING / FILL / MUTE / PATTERN
+```
+
+## Milestone D — 808 BASS acid engine
+
+- [ ] Monophonic saw/square oscillator with optional subtle sub layer.
+- [ ] Resonant diode/ladder-inspired acid filter developed as original DSP.
+- [ ] Envelope modulation and classic short decay workflow.
+- [ ] True step accent affecting VCA/filter/drive.
+- [ ] True slide/portamento without envelope retrigger.
+- [ ] 16/32/64-step pattern lane.
+- [ ] Per-step note / accent / slide / octave.
+- [ ] Transpose, rotate, mutation and scale-lock performance functions.
+- [ ] Original acid/bass factory patterns and patches.
+- [ ] WASM and hardware use the identical engine.
+
+Pages:
+
+```text
+OSC    : WAVE / TUNE / SUB / DRIVE
+FILTER : CUTOFF / RESO / ENV MOD / ACCENT
+ENV    : DECAY / SLIDE / GATE / ACC DECAY
+SEQ    : NOTE / ACCENT / SLIDE / OCTAVE
+PERF   : TEMPO / SWING / PATTERN / PLAY
+```
+
+## Milestone E — ALPHA poly synth
+
+Create an original Alpha-Juno-era inspired synth, not a ROM/emulation copy.
+
+- [ ] Six-voice initial polyphony; measure FM-1 CPU before increasing.
+- [ ] DCO-style saw/pulse/sub/noise oscillator mix.
+- [ ] PWM and LFO modulation.
+- [ ] Resonant low-pass filter with key tracking and envelope amount.
+- [ ] VCA envelope/velocity modes.
+- [ ] ADSR plus optional extended Alpha-style envelope only if UI/CPU remain manageable.
+- [ ] LFO rate/delay and DCO/VCF modulation depths.
+- [ ] Characterful stereo chorus in virtual mode; resource-bounded hardware version.
+- [ ] Chord memory / chord sequence support.
+- [ ] Voice allocation / steal policy and sustain pedal.
+- [ ] Original hoover/brass/pad/strings/bass/pluck factory bank.
+- [ ] CPU stress test with six voices + chorus + the other workstation parts.
+
+Pages:
+
+```text
+DCO    : SAW / PULSE / SUB / NOISE
+VCF    : CUTOFF / RESO / ENV / KEYTRACK
+VCA    : LEVEL / ENV MODE / VELOCITY / PAN
+ENV    : ATTACK / DECAY / SUSTAIN / RELEASE
+LFO    : RATE / DELAY / DCO MOD / VCF MOD
+CHORUS : MODE / RATE / DEPTH / MIX
+SEQ    : CHORD / GATE / PATTERN / PLAY
+```
+
+## Milestone F — Shared sequencer / song workflow
+
+- [ ] One sample-clock master transport.
+- [ ] Independent pattern length per part.
+- [ ] Pattern start remains phase-coherent across all parts.
+- [ ] MINI note lane.
+- [ ] DRUM lane grid.
+- [ ] BASS acid lane with accent/slide.
+- [ ] ALPHA poly/chord lane.
+- [ ] Pair-preserving swing globally, optional per-part offset later.
+- [ ] Probability and microtiming where deterministic on hardware.
+- [ ] Parameter locks / motion lanes using shared parameter identifiers.
+- [ ] Pattern chains and Scene/song arrangement.
+- [ ] Record live keyboard input into selected melodic part.
+
+## Milestone G — Mixer / FX / Scenes
+
+- [ ] Four-part mixer with level, mute and optional pan.
+- [ ] Global delay.
+- [ ] Global resource-bounded reverb/ambience.
+- [ ] Master drive/limiter.
+- [ ] Scene stores four presets/kits, patterns, mixer, FX and clock.
+- [ ] Scene recall is atomic at a safe audio boundary.
+- [ ] 12+ factory demo scenes designed as regression tests.
+- [ ] Do not add another full synth instance; expand musical range through the four dedicated parts.
+
+## Milestone H — Web editor + WASM virtual FM-1
+
+Two views over the same state:
+
+### VIRTUAL
+
+- [ ] Pixel-identical 240×240 native UI rendered from WASM/native display commands.
+- [ ] Simulated FM-1 keyboard, buttons, encoder presses and rotations.
+- [ ] Same selected part/page/focus/HOLD behavior as hardware.
+- [ ] Native C DSP for all four parts in AudioWorklet.
+- [ ] Same master transport and sequencer core.
+- [ ] CPU/load diagnostics and deterministic test capture.
+
+### EDITOR
+
+Inspired by Melodee's device/editor model:
+
+- [ ] Part strip: MINI / DRUM / BASS / ALPHA.
+- [ ] Descriptor-driven parameter groups; no duplicate manually-maintained UI schema.
+- [ ] Large drum grid and bassline sequence editor.
+- [ ] Poly/chord editor for ALPHA.
+- [ ] Full MINI editor using existing parameters.
+- [ ] Mixer / FX / Scene editor.
+- [ ] Hardware connection mode and virtual mode use the same React components/state model.
+- [ ] Hardware live sync via SysEx/USB-MIDI once native protocol is implemented.
+- [ ] Capability/version handshake so editor can adapt to firmware revisions.
+- [ ] Import/export workstation project JSON.
+- [ ] WAV capture from virtual mode for regression testing.
+
+## Milestone I — Presets / demos / regression content
+
+Every implemented feature gets musical test material immediately.
+
+- [ ] MINI: retain and curate current best factory sounds/patterns.
+- [ ] 808 DRUM: at least 8 kits and 24 patterns: electro, hip-hop, techno, house, break, minimal, calibration.
+- [ ] 808 BASS: at least 24 acid/bassline patterns across multiple scales and slide/accent stress cases.
+- [ ] ALPHA: at least 32 original presets including hoover-like, brass, pads, strings, plucks, basses and calibration patches.
+- [ ] At least 12 full four-part demo Scenes.
+- [ ] Each engine has a calibration preset/pattern designed for DSP regression tests.
+- [ ] Golden audio hashes/statistics for stable deterministic renders where appropriate.
+
+## Milestone J — Hardware bring-up / release safety
+
+Pinned Felucca HAL stays the hardware basis until a better proven target layer exists.
+
+- [x] Diagnostic image with raw controls and LCD.
+- [x] Core audio budget image.
+- [x] Real JieLi compile/link workflow.
+- [x] Flash writes disabled.
+- [x] No `.fwsc` release packaging.
+- [ ] Verify real button/encoder mapping on physical FM-1.
+- [ ] Replace old dual-MINI Studio stress image with full four-engine workstation stress image.
+- [ ] Measure worst-case MINI + 808 DRUM + 808 BASS + six-voice ALPHA + FX.
+- [ ] Define quality degradation policy if CPU budget is exceeded (polyphony/oversampling/chorus quality), never random underruns.
+- [ ] Read-only identity validation.
+- [ ] Validate stock V15 return/recovery path.
+- [ ] Only then create a mapped hardware beta.
+- [ ] Only after recovery validation consider `.fwsc` packaging.
+
+## Immediate implementation order
+
+1. Canonical manifest + generated hardware/web descriptors.
+2. New workstation state/part selector; identical virtual and hardware navigation.
+3. 808 BASS engine first — small CPU footprint, validates accent/slide sequencing model.
+4. 808 DRUM core voices + grid.
+5. ALPHA six-voice engine + chorus with explicit CPU budget measurement.
+6. Replace transitional browser Studio layer with real four-part mixer.
+7. Move all four native engines into the WASM AudioWorklet.
+8. Compile the native 240×240 UI renderer to WASM/canvas.
+9. Add shared descriptor-driven web editor and hardware SysEx synchronization.
+10. Build four-part hardware stress diagnostic before any installable firmware.
+
+## Current safety status
+
+Existing target artifacts remain diagnostic/non-installable. The current `fm_studio` dual-MINI code is transitional and must not be treated as the final workstation architecture. Flash write APIs remain disabled and no `.fwsc` should be produced until the physical-device and recovery gates above are completed.
