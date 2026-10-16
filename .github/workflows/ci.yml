@@ -15,11 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify generated parameter protocol
+      - name: Verify generated protocols and workstation UI
         working-directory: .
         run: |
           python3 scripts/generate_params.py
-          git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts
+          python3 scripts/generate_workstation.py
+          git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts firmware/include/fm_workstation_ui.h web/src/generated/workstation.ts
       - name: Install Emscripten
         run: |
           sudo apt-get update -qq
@@ -38,14 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify generated parameter protocol
+      - name: Verify generated protocols and workstation UI
         run: |
           python3 scripts/generate_params.py
-          git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts
-      - name: Compile portable DSP, sequencer, Studio, app, diagnostics, browser ABI and UI
+          python3 scripts/generate_workstation.py
+          git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts firmware/include/fm_workstation_ui.h web/src/generated/workstation.ts
+      - name: Compile portable DSP, workstation state, sequencer, Studio, app, diagnostics, browser ABI and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_state.c -o build/fm_workstation_state.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_studio.c -o build/fm_studio.o
@@ -85,6 +88,10 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c tests/test_dsp.c -lm -o build/test_dsp
           ./build/test_dsp
+      - name: Run workstation navigation parity tests
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_workstation_state.c tests/test_workstation_state.c -o build/test_workstation_state
+          ./build/test_workstation_state
       - name: Run sequencer timing tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_seq.c tests/test_seq.c -o build/test_seq
