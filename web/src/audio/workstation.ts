@@ -14,6 +14,8 @@ async function loadWasmBytes(url:string){
 }
 
 export type WorkstationMeter={peak:number;rms:number;step:number};
+export type WorkstationMiniStep={note:number;velocity:number;gate:number};
+export type WorkstationAlphaStep={notes:[number,number,number,number];velocity:number;gate:number};
 export type WorkstationScene={
   name:string;
   bpm:number;
@@ -93,10 +95,17 @@ export class WorkstationEngine{
   setSequenceMeta(length:number,bpm:number,swing:number){
     this.send({type:'seqMeta',length:Math.max(1,Math.min(64,Math.round(length))),bpm:Math.max(40,Math.min(300,Math.round(bpm))),swing:Math.max(0,Math.min(75,Math.round(swing)))})
   }
+  setMiniStep(index:number,note:number,{velocity=100,gate=.9}:{velocity?:number;gate?:number}={}){
+    this.send({type:'seqMiniStep',index,note,velocity:Math.max(1,Math.min(127,Math.round(velocity))),gate:Math.round(Math.max(.01,Math.min(4,gate))*100)})
+  }
   setBassStep(index:number,note:number,{accent=false,slide=false,velocity=108,gate=.72}:{accent?:boolean;slide?:boolean;velocity?:number;gate?:number}={}){
-    this.send({type:'seqBassStep',index, note, flags:(accent?1:0)|(slide?2:0), velocity, gate:Math.round(Math.max(.01,Math.min(1,gate))*100)})
+    this.send({type:'seqBassStep',index,note,flags:(accent?1:0)|(slide?2:0),velocity,gate:Math.round(Math.max(.01,Math.min(1,gate))*100)})
   }
   setDrumStep(index:number,hits:number,accents:number){this.send({type:'seqDrumStep',index,hits,accents})}
+  setAlphaStep(index:number,notes:readonly number[],{velocity=92,gate=.9}:{velocity?:number;gate?:number}={}){
+    const normalized=[0,1,2,3].map(i=>Math.max(-1,Math.min(127,Math.round(notes[i]??-1))));
+    this.send({type:'seqAlphaStep',index,notes:normalized,velocity:Math.max(1,Math.min(127,Math.round(velocity))),gate:Math.round(Math.max(.01,Math.min(4,gate))*100)})
+  }
 
   async loadScene(scene:WorkstationScene){
     await this.start();
