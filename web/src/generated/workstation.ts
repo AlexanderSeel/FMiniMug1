@@ -52,7 +52,7 @@ export const WORKSTATION_PARTS=[
     "subtitle": "DCO poly synth / Alpha Dial",
     "polyphony": 6,
     "pages": [
-      {"id":"alpha","title":"ALPHA DIAL","params":["ALPHA DIAL","PARAM","PRESET","CHORD"]},
+      {"id":"alpha","title":"ALPHA DIAL","params":["ALPHA DIAL","FOCUS","PRESET","TONE MODIFY"]},
       {"id":"dco","title":"DCO","params":["SAW","PULSE","SUB","NOISE"]},
       {"id":"vcf","title":"VCF","params":["CUTOFF","RESO","ENV","KEYTRACK"]},
       {"id":"vca","title":"VCA","params":["LEVEL","ENV MODE","VELOCITY","CHORUS MIX"]},
