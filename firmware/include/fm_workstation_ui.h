@@ -54,6 +54,7 @@ static const fmw_page_desc_t FMW_BASS808_PAGES[] = {
 };
 
 static const fmw_page_desc_t FMW_ALPHA_PAGES[] = {
+  {"alpha", "ALPHA DIAL", "ALPHA DIAL", "PARAM", "PRESET", "CHORD"},
   {"dco", "DCO", "SAW", "PULSE", "SUB", "NOISE"},
   {"vcf", "VCF", "CUTOFF", "RESO", "ENV", "KEYTRACK"},
   {"vca", "VCA", "LEVEL", "ENV MODE", "VELOCITY", "CHORUS MIX"},
@@ -67,5 +68,5 @@ static const fmw_part_desc_t FMW_PARTS[FMW_PART_COUNT] = {
   {"mini", "MINI", "3 OSC / ladder mono", 1, 6, FMW_MINI_PAGES},
   {"drum808", "808 DRUM", "analog drum machine", 8, 5, FMW_DRUM808_PAGES},
   {"bass808", "808 BASS", "acid bassline", 1, 5, FMW_BASS808_PAGES},
-  {"alpha", "ALPHA", "DCO poly synth", 6, 7, FMW_ALPHA_PAGES},
+  {"alpha", "ALPHA", "DCO poly synth / Alpha Dial", 6, 8, FMW_ALPHA_PAGES},
 };
