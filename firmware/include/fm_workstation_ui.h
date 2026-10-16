@@ -34,7 +34,7 @@ static const fmw_page_desc_t FMW_MINI_PAGES[] = {
   {"filter", "FILTER", "CUTOFF", "RESO", "CONTOUR", "KEYTRACK"},
   {"env", "ENV", "ATTACK", "DECAY", "SUSTAIN", "RELEASE"},
   {"mod", "MOD", "DRIFT", "GLIDE MODE", "PRIORITY", "RETRIG"},
-  {"seq", "SEQ", "TEMPO", "SWING", "SCENE", "PLAY"},
+  {"seq", "SEQ", "STEP", "NOTE", "GATE", "PLAY"},
 };
 
 static const fmw_page_desc_t FMW_DRUM808_PAGES[] = {
@@ -60,7 +60,7 @@ static const fmw_page_desc_t FMW_ALPHA_PAGES[] = {
   {"env", "ENV", "ATTACK", "DECAY", "SUSTAIN", "RELEASE"},
   {"lfo", "LFO", "RATE", "DELAY", "DCO MOD", "VCF MOD"},
   {"chorus", "CHORUS", "MODE", "RATE", "DEPTH", "MIX"},
-  {"seq", "SEQ", "CHORD", "LEVEL", "SCENE", "PLAY"},
+  {"seq", "SEQ", "STEP", "CHORD", "GATE", "PLAY"},
 };
 
 static const fmw_part_desc_t FMW_PARTS[FMW_PART_COUNT] = {
