@@ -21,6 +21,7 @@ The implementation uses original DSP, UI graphics, presets and patterns. Roland/
 - Visible controls must either work or be explicitly marked unavailable; never present decorative controls as functional.
 - Scenes store all four parts, mixer/FX targets, tempo/swing and pattern assignments.
 - Preserve diagnostic-first FM-1 bring-up and never generate a flashable `.fwsc` until real-device/recovery gates are passed.
+- Virtual beta releases may be installable on Windows before FM-1 firmware is declared installable; the two release states must stay explicit and separate.
 
 ## Milestone A — MINI foundation ✅ / maintenance
 
@@ -111,12 +112,13 @@ Source of truth: `shared/workstation.json`.
 - [x] Native PWM / pulse width / PWM rate-depth.
 - [x] Native HPF, DCO range and DCO envelope pitch modulation.
 - [x] Dedicated ALPHA DIAL main page on KNOB1 with parameter navigation and live value editing.
+- [x] Alpha Dial PARAM/VALUE focus toggle via encoder press.
+- [x] TONE MODIFY macro mode on the main screen for BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME.
 - [x] 8 original initial presets.
 - [x] 128 Alpha-Juno-style factory-bank positions/names mapped onto original modeled DSP patches (no Roland ROM/SysEx bundled).
 - [x] Real JieLi full-load image can link with six ALPHA voices + chorus and the other V2 engines.
 - [x] Native-clock four-note ALPHA chord lane with editable STEP / CHORD / GATE / PLAY.
 - [x] ALPHA transport no longer depends on browser-held chord notes.
-- [ ] Alpha Dial PARAM/VALUE focus toggle and dedicated Tone Modify macro mode on the main screen.
 - [ ] Optional user-supplied SysEx import/conversion for closer factory-patch translation.
 - [ ] Sustain pedal / richer chord memory.
 - [ ] Stereo/pan implementation after workstation mixer becomes stereo.
@@ -174,6 +176,8 @@ Source of truth: `shared/workstation.json`.
 - [x] Controls with no real engine implementation are disabled and display N/A.
 - [x] Direct live native sequence editing is available for MINI / DRUM / BASS / ALPHA.
 - [x] Web/WASM production build verifies the four-lane exports and AudioWorklet bundle.
+- [x] Windows beta installer package installs the prebuilt WASM app without Emscripten/source checkout.
+- [x] Installed beta launcher serves the app over localhost and creates desktop/start-menu shortcuts.
 - [ ] Pixel-identical native 240×240 UI rendered to WASM/canvas.
 - [ ] Deterministic WAV capture / regression render.
 - [ ] Browser interaction tests for key-down/up, encoder turn/press, page navigation and transport.
@@ -217,6 +221,9 @@ Source of truth: `shared/workstation.json`.
 - [x] V2 four-engine full-load compile/link stress image.
 - [x] V2 stress image load: MINI 2× + 808 BASS + all 808 DRUM voices + six-voice ALPHA chorus.
 - [x] V2 target image passes CI XIP/BSS/entry/safety checks and is published as NON-INSTALLABLE diagnostic artifact.
+- [x] Verified beta publisher is gated by successful FM-1 Target Diagnostic workflow for the exact commit.
+- [x] Beta release manifest distinguishes `virtual_installer=true` from `hardware_installable=false`.
+- [x] Hardware diagnostic ZIP is checked to contain no `.fwsc` before prerelease publication.
 - [ ] Verify real button/encoder mapping on physical FM-1.
 - [ ] Run `fminimug1-workstation-stress.bin` on real hardware and record LAST / MAX / OVER.
 - [ ] Define quality degradation policy if `OVER` is nonzero, never random underruns.
@@ -225,7 +232,19 @@ Source of truth: `shared/workstation.json`.
 - [ ] Read-only identity validation.
 - [ ] Validate stock V15 return/recovery path.
 - [ ] Only then create a mapped hardware beta.
-- [ ] Only after recovery validation consider `.fwsc` packaging.
+- [ ] Only after recovery validation consider `.fwsc` packaging and browser OTA installation.
+
+## Milestone K — Beta distribution 🚧
+
+- [x] One-shot `.release-beta` marker modeled after TheReFmB1rth.
+- [x] `v0.3.0-beta.1` requested as the first workstation prerelease.
+- [x] Windows installer script + double-click CMD wrapper.
+- [x] Release package contains prebuilt Vite/WASM app, installer, version, manifest and checksums.
+- [x] Release also contains a separately named `hardware-diagnostics-NON-INSTALLABLE` ZIP from the exact verified target workflow.
+- [x] GitHub prerelease creation is idempotent and tied to the exact verified commit SHA.
+- [ ] Validate the packaged Windows installer on a clean Windows user profile.
+- [ ] Add signed/native desktop packaging later if the local-browser launcher proves useful enough.
+- [ ] Add FM-1 browser OTA installer only after the mapped firmware/recovery gates are complete.
 
 ## Current real-target facts
 
@@ -245,15 +264,15 @@ fminimug1-synth-check.bin          # synthetic controls, do not use as mapped fi
 
 ## Immediate implementation order
 
-1. Finish ALPHA Dial PARAM/VALUE focus and Tone Modify behavior on the virtual main screen.
+1. Validate the first Windows/WASM beta package and Alpha Dial/Tone Modify interaction.
 2. Move mixer/scene/transport lane state into a portable native workstation runtime shared by WASM and the future hardware runtime.
 3. Add browser interaction regression tests for key-down/up, encoder turn/press, page navigation and transport.
 4. Add independent per-part pattern length/paging and then probability/motion data.
 5. Compile the native 240×240 renderer to WASM/canvas.
 6. Verify physical FM-1 control IDs and run the V2 workstation stress image.
 7. Tune quality/polyphony from measured FM-1 MAX/OVER, then build the first mapped hardware beta.
-8. Only after recovery validation consider installable packaging.
+8. Only after recovery validation consider installable FM-1 packaging / browser OTA.
 
 ## Current safety status
 
-The new V2 architecture is the active development path. Legacy dual-MINI Studio code remains only as a temporary regression path and should be removed after the V2 hardware mixer/runtime replaces it. Flash writes remain disabled and no `.fwsc` should be produced until physical-device control, CPU and recovery gates are complete.
+The new V2 architecture is the active development path. Legacy dual-MINI Studio code remains only as a temporary regression path and should be removed after the V2 hardware mixer/runtime replaces it. The Windows beta installer installs only the virtual WASM workstation. Flash writes remain disabled and no `.fwsc` should be produced until physical-device control, CPU and recovery gates are complete.
