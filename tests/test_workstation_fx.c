@@ -11,6 +11,7 @@ static void assert_finite_bounded(float value) {
 
 int main(void) {
   fmw_fx_t fx;
+  assert(sizeof(fmw_fx_t) < 22000u);
   fmw_fx_init(&fx, 48000.0f);
 
   assert(fx.delay_mix > 0.0f && fx.delay_mix <= 0.8f);
