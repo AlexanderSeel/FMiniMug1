@@ -90,18 +90,25 @@ export class WorkstationEngine{
   alphaNoteOn(note:number,velocity=110){this.send({type:'alphaNoteOn',note,velocity})}
   alphaNoteOff(note:number){this.send({type:'alphaNoteOff',note})}
 
+  setSequenceMeta(length:number,bpm:number,swing:number){
+    this.send({type:'seqMeta',length:Math.max(1,Math.min(64,Math.round(length))),bpm:Math.max(40,Math.min(300,Math.round(bpm))),swing:Math.max(0,Math.min(75,Math.round(swing)))})
+  }
+  setBassStep(index:number,note:number,{accent=false,slide=false,velocity=108,gate=.72}:{accent?:boolean;slide?:boolean;velocity?:number;gate?:number}={}){
+    this.send({type:'seqBassStep',index, note, flags:(accent?1:0)|(slide?2:0), velocity, gate:Math.round(Math.max(.01,Math.min(1,gate))*100)})
+  }
+  setDrumStep(index:number,hits:number,accents:number){this.send({type:'seqDrumStep',index,hits,accents})}
+
   async loadScene(scene:WorkstationScene){
     await this.start();
     for(const [id,value] of Object.entries(scene.bassPatch.values))this.setBassParam(+id as Bass808ParamId,value);
     for(const [id,value] of Object.entries(scene.alphaPatch.values))this.setAlphaParam(+id as AlphaParamId,value);
     const length=Math.max(scene.bassPattern.steps.length,scene.drumPattern.steps.length);
-    this.send({type:'seqMeta',length,bpm:scene.bpm,swing:scene.swing});
+    this.setSequenceMeta(length,scene.bpm,scene.swing);
     for(let i=0;i<length;i++){
       const b=scene.bassPattern.steps[i%scene.bassPattern.steps.length];
-      const flags=(b.accent?1:0)|(b.slide?2:0);
-      this.send({type:'seqBassStep',index:i,note:b.note,flags,velocity:108,gate:Math.round((b.gate??.72)*100)});
+      this.setBassStep(i,b.note,{accent:!!b.accent,slide:!!b.slide,velocity:108,gate:b.gate??.72});
       const d=scene.drumPattern.steps[i%scene.drumPattern.steps.length];
-      this.send({type:'seqDrumStep',index:i,hits:d.hits,accents:d.accent});
+      this.setDrumStep(i,d.hits,d.accent);
     }
   }
   play(){this.send({type:'seqStart'})}
