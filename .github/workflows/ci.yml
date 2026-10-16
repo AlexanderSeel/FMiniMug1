@@ -48,6 +48,7 @@ jobs:
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_bass808.c -o build/fm_bass808.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_state.c -o build/fm_workstation_state.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
@@ -57,7 +58,7 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
       - name: Verify DSP hot path has no libm dependencies
         run: |
-          if nm -u build/fm_voice.o build/fm_studio.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
+          if nm -u build/fm_voice.o build/fm_studio.o build/fm_bass808.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
             echo 'unexpected libm dependency in portable real-time DSP' >&2
             exit 1
           fi
@@ -84,10 +85,14 @@ jobs:
           MAP='-DFMM_BUTTON_MAP_VERIFIED -DFMM_BTN_RAW_OCT_DOWN=0 -DFMM_BTN_RAW_OCT_UP=1 -DFMM_BTN_RAW_PAGE_LEFT=2 -DFMM_BTN_RAW_PAGE_RIGHT=3 -DFMM_BTN_RAW_PRESET=4 -DFMM_BTN_RAW_PATTERN=5 -DFMM_BTN_RAW_PLAY=6 -DFMM_BTN_RAW_HOLD=7 -DFMM_BTN_RAW_ENC1=8 -DFMM_BTN_RAW_ENC2=9 -DFMM_BTN_RAW_ENC3=10 -DFMM_BTN_RAW_ENC4=11 -DFMM_ENC_RAW_1=0 -DFMM_ENC_RAW_2=1 -DFMM_ENC_RAW_3=2 -DFMM_ENC_RAW_4=3'
           cc -std=c11 -Wall -Wextra -Werror $INC $MAP firmware/target/felucca/fm1_platform_felucca.c tests/test_felucca_platform.c -o build/test_felucca_mapped
           ./build/test_felucca_mapped
-      - name: Run DSP stability, ADSR and mono-priority tests
+      - name: Run MINI DSP stability, ADSR and mono-priority tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_voice.c tests/test_dsp.c -lm -o build/test_dsp
           ./build/test_dsp
+      - name: Run 808 bass DSP accent/slide/stability tests
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_bass808.c tests/test_bass808.c -lm -o build/test_bass808
+          ./build/test_bass808
       - name: Run workstation navigation parity tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_workstation_state.c tests/test_workstation_state.c -o build/test_workstation_state
