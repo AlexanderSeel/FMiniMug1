@@ -5,6 +5,9 @@
 #include "fm1_platform.h"
 #include "fm_diag.h"
 #include "fm_app.h"
+#include "fm_bass808.h"
+#include "fm_drum808.h"
+#include "fm_alpha.h"
 #include <string.h>
 
 #ifndef FMM_TARGET_DIAGNOSTIC
@@ -16,11 +19,14 @@
 #ifndef FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC
 #define FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC 0
 #endif
+#ifndef FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC
+#define FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC 0
+#endif
 
-#if (FMM_TARGET_DIAGNOSTIC + FMM_TARGET_AUDIO_DIAGNOSTIC + FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC) > 1
+#if (FMM_TARGET_DIAGNOSTIC + FMM_TARGET_AUDIO_DIAGNOSTIC + FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC + FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC) > 1
 #error "Select only one target diagnostic mode"
 #endif
-#if !FMM_TARGET_DIAGNOSTIC && !FMM_TARGET_AUDIO_DIAGNOSTIC && !FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC && !defined(FMM_BUTTON_MAP_VERIFIED)
+#if !FMM_TARGET_DIAGNOSTIC && !FMM_TARGET_AUDIO_DIAGNOSTIC && !FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC && !FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC && !defined(FMM_BUTTON_MAP_VERIFIED)
 #error "Normal synth target requires FMM_BUTTON_MAP_VERIFIED after real-device diagnostics"
 #endif
 
@@ -46,7 +52,7 @@ static void render_audio_irq(fm1_audio_block_t *block, void *user) {
   fm_app_render_audio((fm_app_t *)user, block);
 }
 
-#if FMM_TARGET_AUDIO_DIAGNOSTIC || FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC
+#if FMM_TARGET_AUDIO_DIAGNOSTIC || FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC || FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC
 static void u32_text(char *dst, unsigned size, uint32_t value) {
   char tmp[11];
   unsigned n = 0u;
@@ -196,7 +202,91 @@ static void run_studio_audio_diagnostic(void) {
 }
 #endif
 
-#if !FMM_TARGET_AUDIO_DIAGNOSTIC && !FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC
+#if FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC
+static fmb808_t stress_bass;
+static fmd808_t stress_drums;
+static fma_t stress_alpha;
+static uint32_t stress_samples;
+
+static void render_workstation_audio_irq(fm1_audio_block_t *block, void *user) {
+  fm_app_t *mini = (fm_app_t *)user;
+  for (uint32_t i = 0u; i < block->frames; ++i) {
+    const uint32_t t = stress_samples++;
+    if ((t % 6000u) == 0u) fmd808_trigger(&stress_drums, FMD808_BD, 122u, 1u);
+    if ((t % 12000u) == 6000u) fmd808_trigger(&stress_drums, FMD808_SD, 116u, 1u);
+    if ((t % 3000u) == 0u) fmd808_trigger(&stress_drums, FMD808_CH, 92u, 0u);
+    if ((t % 24000u) == 18000u) fmd808_trigger(&stress_drums, FMD808_OH, 108u, 0u);
+    if ((t % 48000u) == 36000u) {
+      fmd808_trigger(&stress_drums, FMD808_CLAP, 108u, 1u);
+      fmd808_trigger(&stress_drums, FMD808_COWBELL, 96u, 0u);
+      fmd808_trigger(&stress_drums, FMD808_TOM, 100u, 0u);
+      fmd808_trigger(&stress_drums, FMD808_RIM, 96u, 0u);
+    }
+    float sample = fm_voice_process(&mini->voice) * 0.30f;
+    sample += fmb808_process(&stress_bass) * 0.22f;
+    sample += fmd808_process(&stress_drums) * 0.24f;
+    sample += fma_process(&stress_alpha) * 0.62f;
+    if (sample > 1.0f) sample = 1.0f;
+    if (sample < -1.0f) sample = -1.0f;
+    const int32_t out = (int32_t)(sample * 2147483392.0f);
+    block->samples[i * 2u] = out;
+    block->samples[i * 2u + 1u] = out;
+  }
+}
+
+static void run_workstation_audio_diagnostic(void) {
+  fm1_felucca_audio_stats_t stats;
+  uint32_t last_screen = 0u;
+  const float sr = fmm_felucca_sample_rate();
+
+  fm_app_init(&app, sr);
+  app.studio.layer_enabled = 0u;
+  app.studio.drums_enabled = 0u;
+  app.studio.delay_mix = 0.0f;
+  app.voice.patch.oversample_2x = 1u;
+  app.voice.patch.cutoff_hz = 1600.0f;
+  app.voice.patch.resonance = 0.58f;
+  app.voice.patch.mixer_drive = 1.65f;
+  fm_voice_note_on(&app.voice, 45u, 112u);
+
+  fmb808_init(&stress_bass, sr);
+  stress_bass.patch.cutoff_hz = 780.0f;
+  stress_bass.patch.resonance = 0.68f;
+  stress_bass.patch.env_mod_hz = 2800.0f;
+  fmb808_note_on(&stress_bass, 36u, 1u, 0u);
+
+  fmd808_init(&stress_drums, sr);
+  stress_drums.kit.drive = 1.35f;
+
+  fma_init(&stress_alpha, sr);
+  stress_alpha.patch.chorus_mode = 2u;
+  stress_alpha.patch.chorus_mix = 0.55f;
+  stress_alpha.patch.resonance = 0.38f;
+  stress_alpha.patch.cutoff_hz = 2100.0f;
+  fma_note_on(&stress_alpha, 48u, 104u);
+  fma_note_on(&stress_alpha, 52u, 104u);
+  fma_note_on(&stress_alpha, 55u, 104u);
+  fma_note_on(&stress_alpha, 60u, 104u);
+  fma_note_on(&stress_alpha, 64u, 104u);
+  fma_note_on(&stress_alpha, 67u, 104u);
+  stress_samples = 0u;
+
+  fm1_felucca_set_audio_renderer(render_workstation_audio_irq, &app);
+  fm1_felucca_audio_stats_reset();
+  fm1_felucca_audio_start();
+
+  for (;;) {
+    const uint32_t now = fm1_platform_millis();
+    if ((uint32_t)(now - last_screen) >= 100u) {
+      last_screen = now;
+      fm1_felucca_audio_stats_get(&stats);
+      render_audio_budget_screen("MODE: V2 FULL LOAD", "MINI+808D+808B+ALPHA6", &stats);
+    }
+  }
+}
+#endif
+
+#if !FMM_TARGET_AUDIO_DIAGNOSTIC && !FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC && !FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC
 static void run_synth(void) {
   fm_app_init(&app, fmm_felucca_sample_rate());
   fm1_felucca_set_audio_renderer(render_audio_irq, &app);
@@ -213,6 +303,8 @@ int main(void) {
   run_audio_diagnostic();
 #elif FMM_TARGET_STUDIO_AUDIO_DIAGNOSTIC
   run_studio_audio_diagnostic();
+#elif FMM_TARGET_WORKSTATION_AUDIO_DIAGNOSTIC
+  run_workstation_audio_diagnostic();
 #else
   run_synth();
 #endif
