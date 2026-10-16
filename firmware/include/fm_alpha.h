@@ -36,6 +36,12 @@ typedef struct {
   float chorus_rate_hz;
   float chorus_depth;
   float chorus_mix;
+  float pulse_width;
+  float pwm_depth;
+  float pwm_rate_hz;
+  float hpf_cutoff_hz;
+  int8_t dco_range_semitones;
+  float dco_env_amount;
 } fma_patch_t;
 
 typedef struct {
@@ -43,6 +49,8 @@ typedef struct {
   float sub_phase;
   float filter1;
   float filter2;
+  float hpf_state;
+  float hpf_input;
   float env;
   float velocity;
   uint32_t age;
@@ -56,6 +64,7 @@ typedef struct {
   fma_patch_t patch;
   fma_voice_t voices[FMA_POLYPHONY];
   float lfo_phase;
+  float pwm_phase;
   float lfo_age_s;
   float chorus_phase;
   float chorus_buffer[FMA_CHORUS_BUFFER];
