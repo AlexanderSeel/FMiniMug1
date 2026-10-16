@@ -1,5 +1,6 @@
 import {useMemo,useState} from 'react';
 import {WORKSTATION_PARTS,type WorkstationPartId} from './generated/workstation';
+import './workstation.css';
 
 const PART_KEYS:WorkstationPartId[]=['mini','drum808','bass808','alpha'];
 
