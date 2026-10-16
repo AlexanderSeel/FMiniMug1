@@ -29,8 +29,9 @@ int main(void) {
 
   fmw_ui_select_part(&s, FMW_PART_ALPHA);
   assert(s.part == FMW_PART_ALPHA);
+  assert(fmw_ui_page_desc(&s)->title[0] == 'A'); /* Alpha Dial home */
   fmw_ui_next_page(&s, -1);
-  assert(s.page[FMW_PART_ALPHA] == 6u);
+  assert(s.page[FMW_PART_ALPHA] == 7u);
   assert(fmw_ui_page_desc(&s)->title[0] == 'S');
 
   fmw_ui_next_part(&s, 1);
