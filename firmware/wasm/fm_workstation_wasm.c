@@ -14,8 +14,15 @@ void fmm_note_off(void);
 uintptr_t fmm_render(int frames);
 
 #define FMW_PATTERN_STEPS 64
+#define FMW_ALPHA_NOTES 4
 #define FMW_BASS_ACCENT 1u
 #define FMW_BASS_SLIDE 2u
+
+typedef struct {
+  int8_t note;
+  uint8_t velocity;
+  uint16_t gate;
+} fmw_mini_step_t;
 
 typedef struct {
   int8_t note;
@@ -29,35 +36,73 @@ typedef struct {
   uint16_t accents;
 } fmw_drum_step_t;
 
+typedef struct {
+  int8_t note[FMW_ALPHA_NOTES];
+  uint8_t velocity;
+  uint16_t gate;
+} fmw_alpha_step_t;
+
 static fmb808_t bass;
 static fmd808_t drums;
 static fma_t alpha;
 static fmw_seq_clock_t clock_state;
+static fmw_mini_step_t mini_steps[FMW_PATTERN_STEPS];
 static fmw_bass_step_t bass_steps[FMW_PATTERN_STEPS];
 static fmw_drum_step_t drum_steps[FMW_PATTERN_STEPS];
+static fmw_alpha_step_t alpha_steps[FMW_PATTERN_STEPS];
 static float output[128];
 static float mini_level = 0.72f;
 static float bass_level = 0.38f;
 static float drum_level = 0.42f;
 static float alpha_level = 0.62f;
+static uint32_t mini_gate_left;
 static uint32_t bass_gate_left;
+static uint32_t alpha_gate_left;
+static int8_t mini_seq_note = -1;
 static uint8_t current_step;
 static int initialized;
 
+static uint32_t gate_samples(uint16_t gate_percent) {
+  const uint32_t duration = clock_state.step_samples ? clock_state.step_samples : 1u;
+  uint32_t result = (duration * (uint32_t)(gate_percent ? gate_percent : 1u)) / 100u;
+  if (!result) result = 1u;
+  return result;
+}
+
+static void mini_seq_off(void) {
+  if (mini_seq_note >= 0) {
+    fmm_note_off_note(mini_seq_note);
+    mini_seq_note = -1;
+  }
+  mini_gate_left = 0u;
+}
+
+static void alpha_seq_off(void) {
+  fma_all_notes_off(&alpha);
+  alpha_gate_left = 0u;
+}
+
 static void clear_patterns(void) {
   for (int i = 0; i < FMW_PATTERN_STEPS; ++i) {
+    mini_steps[i].note = -1;
+    mini_steps[i].velocity = 100u;
+    mini_steps[i].gate = 90u;
     bass_steps[i].note = -1;
     bass_steps[i].flags = 0u;
     bass_steps[i].velocity = 108u;
     bass_steps[i].gate = 72u;
     drum_steps[i].hits = 0u;
     drum_steps[i].accents = 0u;
+    for (int n = 0; n < FMW_ALPHA_NOTES; ++n) alpha_steps[i].note[n] = -1;
+    alpha_steps[i].velocity = 92u;
+    alpha_steps[i].gate = 90u;
   }
 }
 
 static void step_event(uint8_t step, void *user) {
   (void)user;
   current_step = step;
+
   const fmw_drum_step_t *drum = &drum_steps[step];
   for (uint8_t voice = 0u; voice < FMD808_VOICE_COUNT; ++voice) {
     const uint16_t mask = (uint16_t)(1u << voice);
@@ -66,24 +111,42 @@ static void step_event(uint8_t step, void *user) {
     }
   }
 
+  const fmw_mini_step_t *mini_step = &mini_steps[step];
+  if (mini_step->note >= 0) {
+    mini_seq_off();
+    fmm_note_on((uint8_t)mini_step->note, mini_step->velocity);
+    mini_seq_note = mini_step->note;
+    mini_gate_left = gate_samples(mini_step->gate);
+  }
+
   const fmw_bass_step_t *bass_step = &bass_steps[step];
   const uint8_t next_index = (uint8_t)((step + 1u) % clock_state.config.length);
   const fmw_bass_step_t *next = &bass_steps[next_index];
   if (bass_step->note < 0) {
     fmb808_note_off(&bass);
     bass_gate_left = 0u;
-    return;
+  } else {
+    const uint8_t accent = (bass_step->flags & FMW_BASS_ACCENT) ? 1u : 0u;
+    const uint8_t slide = (bass_step->flags & FMW_BASS_SLIDE) ? 1u : 0u;
+    fmb808_note_on(&bass, (uint8_t)bass_step->note, accent, slide);
+    if (next->flags & FMW_BASS_SLIDE) {
+      bass_gate_left = 0u;
+    } else {
+      bass_gate_left = gate_samples(bass_step->gate);
+    }
   }
 
-  const uint8_t accent = (bass_step->flags & FMW_BASS_ACCENT) ? 1u : 0u;
-  const uint8_t slide = (bass_step->flags & FMW_BASS_SLIDE) ? 1u : 0u;
-  fmb808_note_on(&bass, (uint8_t)bass_step->note, accent, slide);
-  if (next->flags & FMW_BASS_SLIDE) {
-    bass_gate_left = 0u;
-  } else {
-    const uint32_t duration = clock_state.step_samples ? clock_state.step_samples : 1u;
-    bass_gate_left = (duration * (uint32_t)(bass_step->gate ? bass_step->gate : 1u)) / 100u;
-    if (!bass_gate_left) bass_gate_left = 1u;
+  const fmw_alpha_step_t *alpha_step = &alpha_steps[step];
+  uint8_t alpha_has_note = 0u;
+  for (int n = 0; n < FMW_ALPHA_NOTES; ++n) {
+    if (alpha_step->note[n] >= 0) { alpha_has_note = 1u; break; }
+  }
+  if (alpha_has_note) {
+    alpha_seq_off();
+    for (int n = 0; n < FMW_ALPHA_NOTES; ++n) {
+      if (alpha_step->note[n] >= 0) fma_note_on(&alpha, (uint8_t)alpha_step->note[n], alpha_step->velocity);
+    }
+    alpha_gate_left = gate_samples(alpha_step->gate);
   }
 }
 
@@ -95,7 +158,10 @@ void fmw_wasm_init(float sample_rate) {
   fma_init(&alpha, sample_rate);
   fmw_seq_clock_init(&clock_state, sample_rate);
   clear_patterns();
+  mini_gate_left = 0u;
   bass_gate_left = 0u;
+  alpha_gate_left = 0u;
+  mini_seq_note = -1;
   current_step = 0u;
   initialized = 1;
 }
@@ -249,6 +315,21 @@ void fmw_wasm_seq_meta(int length, int bpm, int swing) {
 }
 
 __attribute__((visibility("default")))
+void fmw_wasm_seq_mini_step(int index, int note, int velocity, int gate) {
+  ensure_init();
+  if (index < 0 || index >= FMW_PATTERN_STEPS) return;
+  if (note < -1) note = -1;
+  if (note > 127) note = 127;
+  if (velocity < 1) velocity = 1;
+  if (velocity > 127) velocity = 127;
+  if (gate < 1) gate = 1;
+  if (gate > 400) gate = 400;
+  mini_steps[index].note = (int8_t)note;
+  mini_steps[index].velocity = (uint8_t)velocity;
+  mini_steps[index].gate = (uint16_t)gate;
+}
+
+__attribute__((visibility("default")))
 void fmw_wasm_seq_bass_step(int index, int note, int flags, int velocity, int gate) {
   ensure_init();
   if (index < 0 || index >= FMW_PATTERN_STEPS) return;
@@ -272,8 +353,27 @@ void fmw_wasm_seq_drum_step(int index, int hits, int accents) {
   drum_steps[index].accents = (uint16_t)accents;
 }
 
+__attribute__((visibility("default")))
+void fmw_wasm_seq_alpha_step(int index, int note0, int note1, int note2, int note3, int velocity, int gate) {
+  ensure_init();
+  if (index < 0 || index >= FMW_PATTERN_STEPS) return;
+  const int notes[FMW_ALPHA_NOTES] = { note0, note1, note2, note3 };
+  for (int n = 0; n < FMW_ALPHA_NOTES; ++n) {
+    int note = notes[n];
+    if (note < -1) note = -1;
+    if (note > 127) note = 127;
+    alpha_steps[index].note[n] = (int8_t)note;
+  }
+  if (velocity < 1) velocity = 1;
+  if (velocity > 127) velocity = 127;
+  if (gate < 1) gate = 1;
+  if (gate > 400) gate = 400;
+  alpha_steps[index].velocity = (uint8_t)velocity;
+  alpha_steps[index].gate = (uint16_t)gate;
+}
+
 __attribute__((visibility("default"))) void fmw_wasm_seq_start(void) { ensure_init(); fmw_seq_clock_start(&clock_state); }
-__attribute__((visibility("default"))) void fmw_wasm_seq_stop(void) { ensure_init(); fmw_seq_clock_stop(&clock_state); fmb808_note_off(&bass); bass_gate_left = 0u; }
+__attribute__((visibility("default"))) void fmw_wasm_seq_stop(void) { ensure_init(); fmw_seq_clock_stop(&clock_state); mini_seq_off(); fmb808_note_off(&bass); bass_gate_left = 0u; alpha_seq_off(); }
 __attribute__((visibility("default"))) int fmw_wasm_seq_step(void) { return (int)current_step; }
 
 __attribute__((visibility("default")))
@@ -285,9 +385,17 @@ uintptr_t fmw_wasm_render(int frames) {
   const float *mini = (const float *)mini_ptr;
   for (int i = 0; i < frames; ++i) {
     fmw_seq_clock_process(&clock_state, 1u, step_event, 0);
+    if (mini_gate_left) {
+      --mini_gate_left;
+      if (!mini_gate_left) mini_seq_off();
+    }
     if (bass_gate_left) {
       --bass_gate_left;
       if (!bass_gate_left) fmb808_note_off(&bass);
+    }
+    if (alpha_gate_left) {
+      --alpha_gate_left;
+      if (!alpha_gate_left) alpha_seq_off();
     }
     float sample = mini[i] * mini_level;
     sample += fmd808_process(&drums) * drum_level;
