@@ -69,20 +69,40 @@ c += ['};', '']
 (root / 'firmware' / 'include' / 'fm_workstation_ui.h').write_text('\n'.join(c), encoding='utf-8')
 
 # TypeScript: same descriptors, consumed by the virtual/hardware preview UI.
+def compact_page(page: dict) -> str:
+    params = ','.join(json.dumps(x) for x in page['params'])
+    return f'{{"id":{json.dumps(page["id"])},"title":{json.dumps(page["title"])},"params":[{params}]}}'
+
 ts = [
     '// Generated from shared/workstation.json. Do not edit by hand.',
     f"export const WORKSTATION_UI_VERSION={int(data['version'])} as const;",
     f"export const WORKSTATION_ENCODERS={int(data['interaction']['encoders'])} as const;",
-    'export const WORKSTATION_PARTS='
+    'export const WORKSTATION_PARTS=['
 ]
-ts.append(json.dumps(parts, indent=2) + ' as const;')
+for pi, part in enumerate(parts):
+    ts += [
+        '  {',
+        f'    "id": {json.dumps(part["id"])},',
+        f'    "c": {json.dumps(part["c"])},',
+        f'    "title": {json.dumps(part["title"])},',
+        f'    "subtitle": {json.dumps(part["subtitle"])},',
+        f'    "polyphony": {int(part["polyphony"])},',
+        '    "pages": ['
+    ]
+    for i, page in enumerate(part['pages']):
+        comma = ',' if i + 1 < len(part['pages']) else ''
+        ts.append(f'      {compact_page(page)}{comma}')
+    ts += ['    ]', '  }' + (',' if pi + 1 < len(parts) else '')]
 ts += [
+    '] as const;',
     "export type WorkstationPartId=(typeof WORKSTATION_PARTS)[number]['id'];",
     "export type WorkstationPart=(typeof WORKSTATION_PARTS)[number];",
-    'export const WORKSTATION_GLOBAL_PAGES='
+    'export const WORKSTATION_GLOBAL_PAGES=['
 ]
-ts.append(json.dumps(data['globalPages'], indent=2) + ' as const;')
-ts.append('')
+for i, page in enumerate(data['globalPages']):
+    comma = ',' if i + 1 < len(data['globalPages']) else ''
+    ts.append(f'  {compact_page(page)}{comma}')
+ts += ['] as const;', '']
 out = root / 'web' / 'src' / 'generated'
 out.mkdir(parents=True, exist_ok=True)
 (out / 'workstation.ts').write_text('\n'.join(ts), encoding='utf-8')
