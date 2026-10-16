@@ -33,7 +33,9 @@ int main(void) {
   }
 
   fma_all_notes_off(&synth);
-  for (int i = 0; i < 240000; ++i) (void)fma_process(&synth);
+  /* The envelope intentionally uses an analog-style exponential tail. Give a
+   * default 480 ms release enough time to cross the hard silence threshold. */
+  for (int i = 0; i < 480000; ++i) (void)fma_process(&synth);
   assert(active_voices(&synth) == 0);
 
   fma_init(&synth, 48000.0f);
