@@ -18,7 +18,6 @@ function Get-RepoRoot {
 
 function Find-Emsdk([string]$RepoRoot, [string]$ExplicitPath) {
     $candidates = New-Object System.Collections.Generic.List[string]
-
     if ($ExplicitPath) { $candidates.Add($ExplicitPath) }
     if ($env:EMSDK) { $candidates.Add($env:EMSDK) }
 
@@ -39,12 +38,9 @@ function Find-Emsdk([string]$RepoRoot, [string]$ExplicitPath) {
     foreach ($candidate in $candidates | Select-Object -Unique) {
         try {
             $resolved = Resolve-Path $candidate -ErrorAction Stop
-            if (Test-Path (Join-Path $resolved.Path 'emsdk.bat')) {
-                return $resolved.Path
-            }
+            if (Test-Path (Join-Path $resolved.Path 'emsdk.bat')) { return $resolved.Path }
         } catch {}
     }
-
     return $null
 }
 
@@ -56,12 +52,11 @@ function Ensure-Command([string]$Name, [string]$InstallHint) {
 
 $repoRoot = Get-RepoRoot
 $webRoot = Join-Path $repoRoot 'web'
-
 if (-not (Test-Path (Join-Path $webRoot 'package.json'))) {
     throw "Could not find web/package.json below $repoRoot"
 }
 
-Write-Step "Checking prerequisites"
+Write-Step 'Checking prerequisites'
 Ensure-Command 'git' 'Install Git for Windows and reopen PowerShell.'
 Ensure-Command 'node' 'Install Node.js 20+ and reopen PowerShell.'
 Ensure-Command 'npm' 'Install Node.js/npm and reopen PowerShell.'
@@ -71,54 +66,51 @@ if (-not $emsdk) {
     $preferredParent = Split-Path (Split-Path $repoRoot -Parent) -Parent
     if (-not $preferredParent) { $preferredParent = Split-Path $repoRoot -Parent }
     $emsdk = Join-Path $preferredParent 'emsdk'
-
     Write-Step "Emscripten SDK not found; cloning to $emsdk"
     & git clone https://github.com/emscripten-core/emsdk.git $emsdk
     if ($LASTEXITCODE -ne 0) { throw 'Failed to clone emsdk.' }
 }
 
 $emsdkBat = Join-Path $emsdk 'emsdk.bat'
-if (-not (Test-Path $emsdkBat)) {
-    throw "emsdk.bat was not found at $emsdkBat"
-}
+$emsdkEnvBat = Join-Path $emsdk 'emsdk_env.bat'
+if (-not (Test-Path $emsdkBat)) { throw "emsdk.bat was not found at $emsdkBat" }
+if (-not (Test-Path $emsdkEnvBat)) { throw "emsdk_env.bat was not found at $emsdkEnvBat" }
 
 if (-not $SkipEmsdkUpdate) {
-    Write-Step "Installing latest Emscripten toolchain"
+    Write-Step 'Installing latest Emscripten toolchain'
     & $emsdkBat install latest
     if ($LASTEXITCODE -ne 0) { throw 'emsdk install latest failed.' }
 
-    Write-Step "Activating latest Emscripten toolchain"
+    Write-Step 'Activating latest Emscripten toolchain'
     & $emsdkBat activate latest
     if ($LASTEXITCODE -ne 0) { throw 'emsdk activate latest failed.' }
 }
 
-$env:EMSDK = $emsdk
-$emccBat = Join-Path $emsdk 'upstream\emscripten\emcc.bat'
-if (-not (Test-Path $emccBat)) {
-    throw "Emscripten compiler was not found at $emccBat"
-}
+Write-Step "Using Emscripten SDK at $emsdk"
 
-Write-Step "Using Emscripten at $emsdk"
-& $emccBat --version | Select-Object -First 1
-if ($LASTEXITCODE -ne 0) { throw 'emcc verification failed.' }
+# Important on Windows: emsdk_env.bat modifies the environment of cmd.exe, not the
+# parent PowerShell process. Run verification, npm install and Vite in that same cmd.
+$commands = New-Object System.Collections.Generic.List[string]
+$commands.Add('call "' + $emsdkEnvBat + '" >nul')
+$commands.Add('where emcc')
+$commands.Add('emcc --version')
+$commands.Add('cd /d "' + $webRoot + '"')
 
-Push-Location $webRoot
-try {
-    if (-not $SkipNpmInstall) {
-        if (-not (Test-Path (Join-Path $webRoot 'node_modules'))) {
-            Write-Step 'Installing npm dependencies'
-            & npm install
-            if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' }
-        } else {
-            Write-Step 'node_modules already exists; skipping npm install'
-        }
+if (-not $SkipNpmInstall) {
+    if (-not (Test-Path (Join-Path $webRoot 'node_modules'))) {
+        $commands.Add('echo ==^> Installing npm dependencies')
+        $commands.Add('npm install')
+    } else {
+        Write-Step 'node_modules already exists; skipping npm install'
     }
-
-    Write-Step 'Starting FMiniMug1 development server'
-    Write-Host 'The WASM workstation will be built automatically before Vite starts.' -ForegroundColor DarkGray
-    & npm run dev
-    if ($LASTEXITCODE -ne 0) { throw 'npm run dev failed.' }
 }
-finally {
-    Pop-Location
+
+$commands.Add('echo ==^> Starting FMiniMug1 development server')
+$commands.Add('npm run dev')
+$cmdLine = $commands -join ' && '
+
+Write-Host 'The WASM workstation will be built automatically before Vite starts.' -ForegroundColor DarkGray
+& $env:ComSpec /d /s /c $cmdLine
+if ($LASTEXITCODE -ne 0) {
+    throw "FMiniMug1 development startup failed with exit code $LASTEXITCODE."
 }
