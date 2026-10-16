@@ -4,10 +4,11 @@ export const ALPHA_PARAM={
   level:8,envMode:9,velocity:10,pan:11,
   attack:12,decay:13,sustain:14,release:15,
   lfoRate:16,lfoDelay:17,dcoMod:18,vcfMod:19,
-  chorusMode:20,chorusRate:21,chorusDepth:22,chorusMix:23
+  chorusMode:20,chorusRate:21,chorusDepth:22,chorusMix:23,
+  pulseWidth:24,pwmDepth:25,pwmRate:26,hpf:27,dcoRange:28,dcoEnv:29
 } as const;
 export type AlphaParamId=(typeof ALPHA_PARAM)[keyof typeof ALPHA_PARAM];
-export type AlphaPatch={name:string;values:Record<AlphaParamId,number>};
+export type AlphaPatch={name:string;values:Record<number,number>};
 
 const assetUrl=(path:string)=>new URL(`${import.meta.env.BASE_URL}${path}`,document.baseURI).toString();
 async function loadWasmBytes(url:string){
