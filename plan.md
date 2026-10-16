@@ -58,6 +58,10 @@ Source of truth: `shared/workstation.json`.
 - [x] SAVE stores a local virtual snapshot; SCENE page exposes explicit SAVE/LOAD encoder-press actions.
 - [x] MINI / DRUM / BASS / ALPHA SEQ pages map to real sample-clock lane state.
 - [x] Virtual panel rebuilt around one 27-key FM-1 silicone keybed instead of a duplicated fake function-key row.
+- [x] Physical left-control labels preserved as MASTER / SELECT / PRESETS / ALGORITHM.
+- [x] Active browser surface consolidated to one implementation (`FM1WorkstationNext`); obsolete parallel surface removed.
+- [x] Virtual-UI contract CI rejects duplicate surfaces, broken 27-key maps and Alpha-Dial/transport hook drift.
+- [x] Compact PC-key hints displayed directly on the virtual 27-key bed without adding a second keyboard row.
 - [ ] Compile the actual native 240×240 renderer to WASM/canvas for pixel-identical preview.
 - [ ] Move remaining browser-only global state into shared/native C state.
 
@@ -114,6 +118,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Dedicated ALPHA DIAL main page on KNOB1 with parameter navigation and live value editing.
 - [x] Alpha Dial PARAM/VALUE focus toggle via encoder press.
 - [x] TONE MODIFY macro mode on the main screen for BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME.
+- [x] Active Virtual-FM1 path exposes Alpha Dial focus, Tone Modify and preset navigation through real DSP parameters.
 - [x] 8 original initial presets.
 - [x] 128 Alpha-Juno-style factory-bank positions/names mapped onto original modeled DSP patches (no Roland ROM/SysEx bundled).
 - [x] Real JieLi full-load image can link with six ALPHA voices + chorus and the other V2 engines.
@@ -178,9 +183,11 @@ Source of truth: `shared/workstation.json`.
 - [x] Web/WASM production build verifies the four-lane exports and AudioWorklet bundle.
 - [x] Windows beta installer package installs the prebuilt WASM app without Emscripten/source checkout.
 - [x] Installed beta launcher serves the app over localhost and creates desktop/start-menu shortcuts.
+- [x] Refined virtual-device geometry keeps the FM-1 display/control/keybed proportions compact instead of using the oversized legacy web surface.
+- [x] Lightweight Virtual-FM1 CI contract checks active surface, 27-key map, Alpha-Dial/Tone-Modify hooks, physical labels and transport hooks.
 - [ ] Pixel-identical native 240×240 UI rendered to WASM/canvas.
 - [ ] Deterministic WAV capture / regression render.
-- [ ] Browser interaction tests for key-down/up, encoder turn/press, page navigation and transport.
+- [ ] Full browser E2E interaction tests for key-down/up, encoder turn/press, page navigation and transport.
 
 ### Editor
 
@@ -222,6 +229,7 @@ Source of truth: `shared/workstation.json`.
 - [x] V2 stress image load: MINI 2× + 808 BASS + all 808 DRUM voices + six-voice ALPHA chorus.
 - [x] V2 target image passes CI XIP/BSS/entry/safety checks and is published as NON-INSTALLABLE diagnostic artifact.
 - [x] Verified beta publisher is gated by successful FM-1 Target Diagnostic workflow for the exact commit.
+- [x] Beta publisher ignores stale verified runs once `main` has moved, preventing an old build from consuming a new beta tag.
 - [x] Beta release manifest distinguishes `virtual_installer=true` from `hardware_installable=false`.
 - [x] Hardware diagnostic ZIP is checked to contain no `.fwsc` before prerelease publication.
 - [ ] Verify real button/encoder mapping on physical FM-1.
@@ -237,12 +245,16 @@ Source of truth: `shared/workstation.json`.
 ## Milestone K — Beta distribution 🚧
 
 - [x] One-shot `.release-beta` marker modeled after TheReFmB1rth.
-- [x] `v0.3.0-beta.1` requested as the first workstation prerelease.
+- [x] `v0.3.0-beta.1`, `v0.3.0-beta.2` and `v0.3.0-beta.3` published as GitHub prereleases.
 - [x] Windows installer script + double-click CMD wrapper.
+- [x] Installer validates packaged SHA256 checksums before copying files.
+- [x] Installer supports no-launch/no-shortcut options for automation and clean testing.
 - [x] Release package contains prebuilt Vite/WASM app, installer, version, manifest and checksums.
 - [x] Release also contains a separately named `hardware-diagnostics-NON-INSTALLABLE` ZIP from the exact verified target workflow.
 - [x] GitHub prerelease creation is idempotent and tied to the exact verified commit SHA.
-- [ ] Validate the packaged Windows installer on a clean Windows user profile.
+- [x] Windows GitHub Actions smoke test installs the package, serves it on localhost, verifies COOP/COEP + WASM MIME and rejects a tampered package.
+- [x] `v0.3.0-beta.3` is the first release with the hardened checksum-verifying installer and verified Alpha-Dial/Tone-Modify workstation path.
+- [ ] Validate the packaged Windows installer manually on a clean Windows user profile outside CI.
 - [ ] Add signed/native desktop packaging later if the local-browser launcher proves useful enough.
 - [ ] Add FM-1 browser OTA installer only after the mapped firmware/recovery gates are complete.
 
@@ -264,11 +276,11 @@ fminimug1-synth-check.bin          # synthetic controls, do not use as mapped fi
 
 ## Immediate implementation order
 
-1. Validate the first Windows/WASM beta package and Alpha Dial/Tone Modify interaction.
+1. Add full browser E2E interaction tests around the now-single Virtual-FM1 surface.
 2. Move mixer/scene/transport lane state into a portable native workstation runtime shared by WASM and the future hardware runtime.
-3. Add browser interaction regression tests for key-down/up, encoder turn/press, page navigation and transport.
-4. Add independent per-part pattern length/paging and then probability/motion data.
-5. Compile the native 240×240 renderer to WASM/canvas.
+3. Add independent per-part pattern length/paging and then probability/motion data.
+4. Compile the native 240×240 renderer to WASM/canvas.
+5. Expand calm factory/demo content and add deterministic audio renders.
 6. Verify physical FM-1 control IDs and run the V2 workstation stress image.
 7. Tune quality/polyphony from measured FM-1 MAX/OVER, then build the first mapped hardware beta.
 8. Only after recovery validation consider installable FM-1 packaging / browser OTA.
