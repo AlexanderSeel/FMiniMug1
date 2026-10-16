@@ -2,7 +2,7 @@ export const BASS808_PARAM={wave:0,tune:1,sub:2,drive:3,cutoff:4,resonance:5,env
 export type Bass808ParamId=(typeof BASS808_PARAM)[keyof typeof BASS808_PARAM];
 export type Bass808Step={note:number;accent?:boolean;slide?:boolean;gate?:number};
 export type Bass808Pattern={name:string;bpm:number;swing:number;steps:Bass808Step[]};
-export type Bass808Patch={name:string;values:Record<Bass808ParamId,number>};
+export type Bass808Patch={name:string;values:Record<number,number>};
 
 const assetUrl=(path:string)=>new URL(`${import.meta.env.BASE_URL}${path}`,document.baseURI).toString();
 
