@@ -5,7 +5,8 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
     this.exports = null;
     this.memory = null;
     this.meterCounter = 0;
-    this.mode = options.processorOptions?.mode === 'bass808' ? 'bass808' : 'mini';
+    const requestedMode = options.processorOptions?.mode;
+    this.mode = requestedMode === 'bass808' || requestedMode === 'drum808' ? requestedMode : 'mini';
 
     try {
       const bytes = options.processorOptions?.wasmBytes;
@@ -21,6 +22,9 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       if (this.mode === 'bass808') {
         if (!this.exports.fmb808_wasm_init) throw new Error('WASM lacks 808 BASS exports');
         this.exports.fmb808_wasm_init(sampleRate);
+      } else if (this.mode === 'drum808') {
+        if (!this.exports.fmd808_wasm_init) throw new Error('WASM lacks 808 DRUM exports');
+        this.exports.fmd808_wasm_init(sampleRate);
       } else {
         this.exports.fmm_init(sampleRate);
       }
@@ -41,6 +45,14 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
           this.exports.fmb808_wasm_note_on(m.note, m.accent ? 1 : 0, m.slide ? 1 : 0);
         } else if (m.type === 'noteOff') this.exports.fmb808_wasm_note_off();
         else if (m.type === 'reset') this.exports.fmb808_wasm_reset();
+        return;
+      }
+
+      if (this.mode === 'drum808') {
+        if (m.type === 'voiceParam') this.exports.fmd808_wasm_set_voice_param(m.voice, m.param, m.value);
+        else if (m.type === 'globalParam') this.exports.fmd808_wasm_set_global_param(m.param, m.value);
+        else if (m.type === 'trigger') this.exports.fmd808_wasm_trigger(m.voice, m.velocity ?? 110, m.accent ? 1 : 0);
+        else if (m.type === 'reset') this.exports.fmd808_wasm_reset();
         return;
       }
 
@@ -78,8 +90,11 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       return true;
     }
 
-    const ptr = this.mode === 'bass808' ?
-      this.exports.fmb808_wasm_render(frames) : this.exports.fmm_render(frames);
+    let ptr;
+    if (this.mode === 'bass808') ptr = this.exports.fmb808_wasm_render(frames);
+    else if (this.mode === 'drum808') ptr = this.exports.fmd808_wasm_render(frames);
+    else ptr = this.exports.fmm_render(frames);
+
     const mono = new Float32Array(this.memory.buffer, ptr, frames);
     let peak = 0;
     let sum = 0;
