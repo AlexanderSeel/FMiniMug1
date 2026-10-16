@@ -1,0 +1,27 @@
+name: Virtual FM-1 UI Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/src/**'
+      - 'shared/workstation.json'
+      - 'scripts/check_virtual_ui_contract.mjs'
+      - '.github/workflows/virtual-ui-contract.yml'
+  pull_request:
+    paths:
+      - 'web/src/**'
+      - 'shared/workstation.json'
+      - 'scripts/check_virtual_ui_contract.mjs'
+      - '.github/workflows/virtual-ui-contract.yml'
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check active virtual FM-1 input and Alpha-Dial contract
+        run: node scripts/check_virtual_ui_contract.mjs
