@@ -1,0 +1,64 @@
+/* Geometry pass for the FM-1 virtual hardware surface.
+   Keep this separate from fm1Virtual.css so functional styling and device geometry
+   can evolve independently. */
+
+:root{--fm1-panel-width:1180px;--fm1-display-size:242px}
+.fm1Stage{padding:12px 10px 26px}
+.fm1Title,.fm1Device,.fm1Status,.fm1Message{width:min(var(--fm1-panel-width),98vw)}
+.fm1Title{margin-bottom:8px;padding:0 4px}
+.fm1Title strong{font-size:13px;letter-spacing:.095em}
+.fm1Device{border-radius:22px;padding:17px 19px 16px;box-shadow:0 24px 60px #000c,inset 0 1px #505050,inset 0 -3px #090909}
+.fm1Device:before{left:20px;bottom:6px;font-size:10px}
+
+.fm1Top{grid-template-columns:164px var(--fm1-display-size) minmax(0,1fr);gap:20px;min-height:248px;align-items:start}
+.fm1LeftControls{gap:7px 10px;padding-top:1px}
+.fm1LeftControls .hardwareKnob{min-width:66px;min-height:69px}
+.fm1LeftControls .hardwareKnob>button{width:42px;height:42px}
+.fm1LeftControls .hardwareKnob>button span{left:18px;height:13px;transform-origin:1px 17px}
+.fm1LeftControls .hardwareKnob label{font-size:7px;margin-bottom:4px}
+.fm1LeftControls .hardwareKnob small{font-size:6px;max-width:74px;margin-top:3px}
+.fm1Oct{height:25px;font-size:7px;border-radius:5px}
+.octReadout{font-size:7px}
+
+.fm1DisplayBezel{width:var(--fm1-display-size);height:var(--fm1-display-size);padding:11px;border-radius:18px;box-shadow:0 5px 9px #000,inset 0 1px #333}
+.fm1Display{padding:8px;gap:4px}
+.displayHeader{font-size:9px;padding-bottom:3px}
+.displayScene{font-size:10px}
+.displayScene small{font-size:6px}
+.displayPage{font-size:9px}.displayPage strong{font-size:13px}
+.alphaDialReadout{min-height:31px;padding:4px 6px;gap:5px}
+.alphaDialReadout small{font-size:5.5px}.alphaDialReadout b{font-size:8px}.alphaDialReadout strong{font-size:9px}
+.displayParams{gap:3px;min-height:66px}.displayParams div{padding:3px 4px}.displayParams b{font-size:7px}.displayParams small,.displayParams em{font-size:5.5px}
+.displaySteps{gap:1px;height:12px}.displaySteps span{height:10px;font-size:4.5px}
+.displayFooter{font-size:5.5px;padding-top:2px}
+
+.fm1RightControls{grid-template-rows:82px auto;gap:11px;padding-top:2px}
+.fm1KnobRow{grid-template-columns:repeat(4,minmax(78px,1fr));gap:7px}
+.fm1RightControls .hardwareKnob{min-width:72px;min-height:72px}
+.fm1RightControls .hardwareKnob>button{width:43px;height:43px}
+.fm1RightControls .hardwareKnob>button span{left:18.5px;height:14px;transform-origin:1px 18px}
+.fm1RightControls .hardwareKnob label{font-size:7px;margin-bottom:4px}
+.fm1RightControls .hardwareKnob small{font-size:6px;max-width:92px;margin-top:3px}
+.fm1RightControls .alphaDialKnob{min-width:92px}
+.fm1RightControls .alphaDialKnob>button{width:57px;height:57px;border-width:3px}
+.fm1RightControls .alphaDialKnob>button span{left:24px;height:19px;transform-origin:1px 23px}
+.fm1RightControls .alphaDialKnob label{font-size:8px}
+.fm1FunctionGrid{grid-template-columns:repeat(6,minmax(50px,1fr));gap:5px}
+.fm1FunctionGrid button{min-height:30px;border-radius:5px;font-size:7px;padding:0 4px}
+
+/* One compact 27-key silicone bed. The upper keys are the physical sharp/function
+   pads; they are not a second control row. */
+.fm1Keybed{height:138px;margin:10px 5px 8px;border-top-color:#121212}
+.fm1Keybed button i{width:3px;height:14px;top:9px}
+.fm1Keybed button small{bottom:4px;font-size:5.5px}
+.fm1Keybed button:nth-child(1),.fm1Keybed button:nth-child(3),.fm1Keybed button:nth-child(5),.fm1Keybed button:nth-child(7),.fm1Keybed button:nth-child(8),.fm1Keybed button:nth-child(10),.fm1Keybed button:nth-child(12),.fm1Keybed button:nth-child(13),.fm1Keybed button:nth-child(15),.fm1Keybed button:nth-child(17),.fm1Keybed button:nth-child(19),.fm1Keybed button:nth-child(20),.fm1Keybed button:nth-child(22),.fm1Keybed button:nth-child(24),.fm1Keybed button:nth-child(25),.fm1Keybed button:nth-child(27){top:61px;height:62px;border-radius:14px}
+.fm1Keybed button:nth-child(2),.fm1Keybed button:nth-child(4),.fm1Keybed button:nth-child(6),.fm1Keybed button:nth-child(9),.fm1Keybed button:nth-child(11),.fm1Keybed button:nth-child(14),.fm1Keybed button:nth-child(16),.fm1Keybed button:nth-child(18),.fm1Keybed button:nth-child(21),.fm1Keybed button:nth-child(23),.fm1Keybed button:nth-child(26){top:8px;height:48px;border-radius:13px}
+.fm1Keybed button:nth-child(2)::after,.fm1Keybed button:nth-child(4)::after,.fm1Keybed button:nth-child(6)::after,.fm1Keybed button:nth-child(9)::after,.fm1Keybed button:nth-child(11)::after,.fm1Keybed button:nth-child(14)::after,.fm1Keybed button:nth-child(16)::after,.fm1Keybed button:nth-child(18)::after,.fm1Keybed button:nth-child(21)::after,.fm1Keybed button:nth-child(23)::after{top:29px;font-size:5.5px}
+
+.fm1Status{margin-top:8px;gap:5px}.fm1Status span{padding:7px 8px;font-size:8px;border-radius:6px}
+
+@media(max-width:1050px){
+  .fm1Device{width:1000px;max-width:none}.fm1Title,.fm1Status,.fm1Message{width:1000px;max-width:none}
+  .fm1Stage{overflow-x:auto}.fm1Top{grid-template-columns:154px 232px 1fr;gap:16px}
+  .fm1DisplayBezel{width:232px;height:232px}.fm1KnobRow{gap:4px}.fm1FunctionGrid{gap:4px}
+}
