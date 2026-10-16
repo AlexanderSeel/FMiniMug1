@@ -1,0 +1,228 @@
+name: Publish verified beta
+
+on:
+  workflow_run:
+    workflows: ["FM-1 Target Diagnostic"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish verified FMiniMug1 beta
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact verified commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Resolve one-shot beta request
+        id: beta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ ! -s .release-beta ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "No .release-beta marker on verified commit."
+            exit 0
+          fi
+          TAG=$(tr -d '[:space:]' < .release-beta)
+          case "$TAG" in
+            v*-beta.*|v*-beta*) ;;
+            *) echo "Invalid beta tag: $TAG" >&2; exit 1 ;;
+          esac
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download verified non-installable hardware diagnostics
+        if: steps.beta.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p hardware
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "FMiniMug1-hardware-beta-NON-INSTALLABLE" \
+            --dir hardware
+          test -s hardware/HARDWARE-BETA-WARNING.txt
+          test -s hardware/fminimug1-workstation-stress.bin
+          if find hardware -type f -name '*.fwsc' | grep -q .; then
+            echo "Safety failure: diagnostic artifact unexpectedly contains .fwsc" >&2
+            exit 1
+          fi
+
+      - name: Install Node and Emscripten
+        if: steps.beta.outputs.publish == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y emscripten zip
+
+      - name: Set up Node
+        if: steps.beta.outputs.publish == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build exact Web/WASM beta
+        if: steps.beta.outputs.publish == 'true'
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          test -s dist/index.html
+          test -s dist/dsp/fminimug1.wasm
+          test -s dist/dsp/fminimug1-worklet.js
+
+      - name: Assemble beta packages
+        if: steps.beta.outputs.publish == 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.beta.outputs.tag }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          ROOT="release/FMiniMug1-${TAG}"
+          mkdir -p "$ROOT/app" release/out
+          cp -a web/dist/. "$ROOT/app/"
+          cp scripts/Install-FMiniMug1-Beta.ps1 "$ROOT/Install-FMiniMug1-Beta.ps1"
+          cp scripts/Install-FMiniMug1-Beta.cmd "$ROOT/Install-FMiniMug1-Beta.cmd"
+          printf '%s\n' "$TAG" > "$ROOT/VERSION.txt"
+          cat > "$ROOT/README.txt" <<EOF
+          FMiniMug1 $TAG
+          ==============================
+          Windows virtual-workstation beta.
+
+          Install:
+            Double-click Install-FMiniMug1-Beta.cmd
+          or:
+            powershell -ExecutionPolicy Bypass -File .\\Install-FMiniMug1-Beta.ps1
+
+          The installed application runs locally in your browser and uses the
+          same native C DSP compiled to WASM for MINI, 808 DRUM, 808 BASS and ALPHA.
+
+          IMPORTANT HARDWARE STATUS
+          -------------------------
+          This beta installer DOES NOT flash an FM-1.
+          The hardware diagnostic ZIP in the GitHub release contains raw,
+          NON-INSTALLABLE diagnostic binaries only. It intentionally contains
+          no .fwsc package. Do not treat those raw binaries as normal firmware.
+          EOF
+          python3 - "$ROOT/manifest.json" "$TAG" "$HEAD_SHA" <<'PY'
+          import json,sys
+          out,tag,commit=sys.argv[1:]
+          with open(out,'w',encoding='utf-8') as f:
+              json.dump({
+                  'product':'FMiniMug1',
+                  'tag':tag,
+                  'commit':commit,
+                  'virtual_installer':True,
+                  'hardware_installable':False,
+                  'hardware_flash_package':None,
+                  'engines':['MINI','808 DRUM','808 BASS','ALPHA'],
+                  'runtime':'native C DSP via WASM'
+              },f,indent=2,sort_keys=True)
+              f.write('\n')
+          PY
+          (
+            cd "$ROOT"
+            find app -type f -print0 | sort -z | xargs -0 sha256sum
+            sha256sum Install-FMiniMug1-Beta.ps1 Install-FMiniMug1-Beta.cmd VERSION.txt README.txt manifest.json
+          ) > "$ROOT/SHA256SUMS"
+          (cd release && zip -qr "out/FMiniMug1-${TAG}-windows-beta.zip" "FMiniMug1-${TAG}")
+          (cd hardware && zip -qr "../release/out/FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip" .)
+          sha256sum release/out/*.zip > release/out/SHA256SUMS
+          cp "$ROOT/manifest.json" release/out/manifest.json
+
+      - name: Verify release payload
+        if: steps.beta.outputs.publish == 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.beta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test -s "release/out/FMiniMug1-${TAG}-windows-beta.zip"
+          test -s "release/out/FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip"
+          test -s release/out/SHA256SUMS
+          test -s release/out/manifest.json
+          (cd release/out && sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import json
+          m=json.load(open('release/out/manifest.json',encoding='utf-8'))
+          assert m['virtual_installer'] is True
+          assert m['hardware_installable'] is False
+          assert m['hardware_flash_package'] is None
+          PY
+
+      - name: Prepare beta release notes
+        if: steps.beta.outputs.publish == 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.beta.outputs.tag }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          ## FMiniMug1 $TAG — first workstation beta
+
+          Built from commit \`$HEAD_SHA\` after the exact commit passed the real JieLi target diagnostic workflow and its safety gates.
+
+          ### Virtual workstation beta
+          - FM-1-style virtual hardware surface
+          - native C/WASM MINI, 808 DRUM, 808 BASS and six-voice ALPHA engines
+          - shared native sample-clock sequencer
+          - calmer default demo scenes
+          - ALPHA Dial workflow with PARAM/VALUE focus and Tone Modify macros
+          - native delay / ambience / master drive
+          - Windows one-call installer package
+
+          ### Windows install
+          Download \`FMiniMug1-${TAG}-windows-beta.zip\`, extract it and double-click:
+
+          \`Install-FMiniMug1-Beta.cmd\`
+
+          The installer copies the prebuilt app to LocalAppData, creates shortcuts and runs it on localhost. It does not require Emscripten or a source checkout.
+
+          ### Hardware diagnostics
+          \`FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip\` contains the verified target diagnostics from the same commit.
+
+          **Those files are not an FM-1 firmware installer and are not declared safe to flash. No .fwsc is included.** A real hardware installer will only be enabled after physical control mapping, CPU/OVER testing and recovery validation are complete.
+          EOF
+
+      - name: Create prerelease
+        if: steps.beta.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.beta.outputs.tag }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$HEAD_SHA" \
+            --title "FMiniMug1 $TAG" \
+            --notes-file release-notes.md \
+            --prerelease \
+            "release/out/FMiniMug1-${TAG}-windows-beta.zip" \
+            "release/out/FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip" \
+            release/out/manifest.json \
+            release/out/SHA256SUMS
