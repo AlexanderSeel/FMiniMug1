@@ -16,8 +16,10 @@ emcc \
   -std=c11 \
   -Ifirmware/include \
   firmware/src/fm_voice.c \
+  firmware/src/fm_bass808.c \
   firmware/src/fm_seq.c \
   firmware/wasm/fm_voice_wasm.c \
+  firmware/wasm/fm_bass808_wasm.c \
   -s STANDALONE_WASM=1 \
   -s FILESYSTEM=0 \
   -s MALLOC=emmalloc \
@@ -38,6 +40,12 @@ emcc \
   -Wl,--export=fmm_seq_stop \
   -Wl,--export=fmm_seq_step \
   -Wl,--export=fmm_render \
+  -Wl,--export=fmb808_wasm_init \
+  -Wl,--export=fmb808_wasm_reset \
+  -Wl,--export=fmb808_wasm_set_param \
+  -Wl,--export=fmb808_wasm_note_on \
+  -Wl,--export=fmb808_wasm_note_off \
+  -Wl,--export=fmb808_wasm_render \
   -o "$OUT/fminimug1.wasm"
 
-echo "built $OUT/fminimug1.wasm"
+echo "built $OUT/fminimug1.wasm with MINI + 808 BASS native engines"
