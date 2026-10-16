@@ -55,32 +55,19 @@ static float envelope_tick(fma_voice_t *voice, const fma_patch_t *patch, float s
   switch ((fma_env_stage_t)voice->env_stage) {
     case FMA_ENV_ATTACK:
       voice->env += (1.0f - voice->env) * coeff(patch->attack_s, sr);
-      if (voice->env >= 0.995f) {
-        voice->env = 1.0f;
-        voice->env_stage = FMA_ENV_DECAY;
-      }
+      if (voice->env >= 0.995f) { voice->env = 1.0f; voice->env_stage = FMA_ENV_DECAY; }
       break;
     case FMA_ENV_DECAY:
       voice->env += (patch->sustain - voice->env) * coeff(patch->decay_s, sr);
-      if ((voice->env > patch->sustain ? voice->env - patch->sustain : patch->sustain - voice->env) < 0.001f) {
-        voice->env = patch->sustain;
-        voice->env_stage = FMA_ENV_SUSTAIN;
-      }
+      if ((voice->env > patch->sustain ? voice->env - patch->sustain : patch->sustain - voice->env) < 0.001f) { voice->env = patch->sustain; voice->env_stage = FMA_ENV_SUSTAIN; }
       break;
-    case FMA_ENV_SUSTAIN:
-      voice->env = patch->sustain;
-      break;
+    case FMA_ENV_SUSTAIN: voice->env = patch->sustain; break;
     case FMA_ENV_RELEASE:
       voice->env += (0.0f - voice->env) * coeff(patch->release_s, sr);
-      if (voice->env < 0.00001f) {
-        voice->env = 0.0f;
-        voice->env_stage = FMA_ENV_OFF;
-      }
+      if (voice->env < 0.00001f) { voice->env = 0.0f; voice->env_stage = FMA_ENV_OFF; }
       break;
     case FMA_ENV_OFF:
-    default:
-      voice->env = 0.0f;
-      break;
+    default: voice->env = 0.0f; break;
   }
   return clampf(voice->env, 0.0f, 1.02f);
 }
@@ -142,17 +129,14 @@ void fma_note_on(fma_t *synth, uint8_t midi_note, uint8_t velocity) {
   voice->env = 0.0f;
   voice->env_stage = FMA_ENV_ATTACK;
   voice->age = ++synth->age_counter;
-  voice->lfo_age_s = 0.0f;
+  synth->lfo_age_s = 0.0f;
 }
 
 void fma_note_off(fma_t *synth, uint8_t midi_note) {
   if (!synth) return;
   for (int i = 0; i < FMA_POLYPHONY; ++i) {
     fma_voice_t *voice = &synth->voices[i];
-    if (voice->env_stage != FMA_ENV_OFF && voice->note == midi_note) {
-      voice->gate = 0u;
-      voice->env_stage = FMA_ENV_RELEASE;
-    }
+    if (voice->env_stage != FMA_ENV_OFF && voice->note == midi_note) { voice->gate = 0u; voice->env_stage = FMA_ENV_RELEASE; }
   }
 }
 
@@ -160,10 +144,7 @@ void fma_all_notes_off(fma_t *synth) {
   if (!synth) return;
   for (int i = 0; i < FMA_POLYPHONY; ++i) {
     fma_voice_t *voice = &synth->voices[i];
-    if (voice->env_stage != FMA_ENV_OFF) {
-      voice->gate = 0u;
-      voice->env_stage = FMA_ENV_RELEASE;
-    }
+    if (voice->env_stage != FMA_ENV_OFF) { voice->gate = 0u; voice->env_stage = FMA_ENV_RELEASE; }
   }
 }
 
@@ -200,7 +181,6 @@ float fma_process(fma_t *synth) {
     if (patch->hpf_cutoff_hz > 1.0f) {
       const float hg = clampf(patch->hpf_cutoff_hz / sr * 4.0f, 0.001f, 0.75f);
       voice->hpf_state += hg * (raw - voice->hpf_state);
-      voice->hpf_input = raw;
       raw -= voice->hpf_state;
     }
 
