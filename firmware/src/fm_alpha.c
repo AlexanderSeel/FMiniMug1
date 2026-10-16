@@ -2,7 +2,6 @@
 #include <string.h>
 
 #define FMA_LN2 0.69314718055994530942f
-#define FMA_PI2 6.28318530717958647692f
 
 static float clampf(float x, float lo, float hi) {
   return x < lo ? lo : (x > hi ? hi : x);
@@ -122,6 +121,12 @@ void fma_init(fma_t *synth, float sample_rate) {
   synth->patch.chorus_rate_hz = 0.28f;
   synth->patch.chorus_depth = 0.46f;
   synth->patch.chorus_mix = 0.34f;
+  synth->patch.pulse_width = 0.50f;
+  synth->patch.pwm_depth = 0.12f;
+  synth->patch.pwm_rate_hz = 0.30f;
+  synth->patch.hpf_cutoff_hz = 0.0f;
+  synth->patch.dco_range_semitones = 0;
+  synth->patch.dco_env_amount = 0.0f;
 }
 
 void fma_set_patch(fma_t *synth, const fma_patch_t *patch) {
@@ -137,7 +142,7 @@ void fma_note_on(fma_t *synth, uint8_t midi_note, uint8_t velocity) {
   voice->env = 0.0f;
   voice->env_stage = FMA_ENV_ATTACK;
   voice->age = ++synth->age_counter;
-  synth->lfo_age_s = 0.0f;
+  voice->lfo_age_s = 0.0f;
 }
 
 void fma_note_off(fma_t *synth, uint8_t midi_note) {
@@ -168,25 +173,36 @@ float fma_process(fma_t *synth) {
   const fma_patch_t *patch = &synth->patch;
   synth->lfo_phase += clampf(patch->lfo_rate_hz, 0.01f, 20.0f) / sr;
   if (synth->lfo_phase >= 1.0f) synth->lfo_phase -= 1.0f;
+  synth->pwm_phase += clampf(patch->pwm_rate_hz, 0.01f, 20.0f) / sr;
+  if (synth->pwm_phase >= 1.0f) synth->pwm_phase -= 1.0f;
   synth->lfo_age_s += 1.0f / sr;
   const float lfo_fade = patch->lfo_delay_s <= 0.0f ? 1.0f : clampf(synth->lfo_age_s / patch->lfo_delay_s, 0.0f, 1.0f);
   const float lfo = triangle(synth->lfo_phase) * lfo_fade;
+  const float pwm = triangle(synth->pwm_phase);
   float mix = 0.0f;
 
   for (int i = 0; i < FMA_POLYPHONY; ++i) {
     fma_voice_t *voice = &synth->voices[i];
     if (voice->env_stage == FMA_ENV_OFF) continue;
     const float env = envelope_tick(voice, patch, sr);
-    const float pitch_ratio = fast_exp2((lfo * patch->lfo_dco_amount) / 12.0f);
-    const float hz = midi_hz(voice->note) * pitch_ratio;
+    const float semitones = (float)patch->dco_range_semitones + lfo * patch->lfo_dco_amount + env * patch->dco_env_amount;
+    const float hz = midi_hz(voice->note) * fast_exp2(semitones / 12.0f);
     voice->phase += hz / sr;
     if (voice->phase >= 1.0f) voice->phase -= 1.0f;
     voice->sub_phase += hz * 0.5f / sr;
     if (voice->sub_phase >= 1.0f) voice->sub_phase -= 1.0f;
     const float saw = 2.0f * voice->phase - 1.0f;
-    const float pulse = voice->phase < 0.5f ? 1.0f : -1.0f;
+    const float width = clampf(patch->pulse_width + pwm * patch->pwm_depth, 0.05f, 0.95f);
+    const float pulse = voice->phase < width ? 1.0f : -1.0f;
     const float sub = voice->sub_phase < 0.5f ? 1.0f : -1.0f;
-    const float raw = saw * patch->saw_level + pulse * patch->pulse_level + sub * patch->sub_level + noise(synth) * patch->noise_level;
+    float raw = saw * patch->saw_level + pulse * patch->pulse_level + sub * patch->sub_level + noise(synth) * patch->noise_level;
+
+    if (patch->hpf_cutoff_hz > 1.0f) {
+      const float hg = clampf(patch->hpf_cutoff_hz / sr * 4.0f, 0.001f, 0.75f);
+      voice->hpf_state += hg * (raw - voice->hpf_state);
+      voice->hpf_input = raw;
+      raw -= voice->hpf_state;
+    }
 
     const float key = ((float)voice->note - 60.0f) / 12.0f;
     float cutoff = patch->cutoff_hz + env * patch->env_amount_hz + lfo * patch->lfo_vcf_amount_hz;
