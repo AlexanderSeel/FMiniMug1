@@ -20,8 +20,8 @@ typedef struct {
   uint16_t delay_samples;
   uint16_t delay_pos;
   uint16_t ambience_pos;
-  float delay_buffer[FMW_FX_DELAY_BUFFER];
-  float ambience_buffer[FMW_FX_AMBIENCE_BUFFER];
+  int16_t delay_buffer[FMW_FX_DELAY_BUFFER];
+  int16_t ambience_buffer[FMW_FX_AMBIENCE_BUFFER];
 } fmw_fx_t;
 
 void fmw_fx_init(fmw_fx_t *fx, float sample_rate);
