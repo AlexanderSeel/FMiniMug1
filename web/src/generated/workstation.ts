@@ -14,7 +14,7 @@ export const WORKSTATION_PARTS=[
       {"id":"filter","title":"FILTER","params":["CUTOFF","RESO","CONTOUR","KEYTRACK"]},
       {"id":"env","title":"ENV","params":["ATTACK","DECAY","SUSTAIN","RELEASE"]},
       {"id":"mod","title":"MOD","params":["DRIFT","GLIDE MODE","PRIORITY","RETRIG"]},
-      {"id":"seq","title":"SEQ","params":["TEMPO","STEP","SCENE","PLAY"]}
+      {"id":"seq","title":"SEQ","params":["TEMPO","SWING","SCENE","PLAY"]}
     ]
   },
   {
@@ -58,7 +58,7 @@ export const WORKSTATION_PARTS=[
       {"id":"env","title":"ENV","params":["ATTACK","DECAY","SUSTAIN","RELEASE"]},
       {"id":"lfo","title":"LFO","params":["RATE","DELAY","DCO MOD","VCF MOD"]},
       {"id":"chorus","title":"CHORUS","params":["MODE","RATE","DEPTH","MIX"]},
-      {"id":"seq","title":"SEQ","params":["CHORD","GATE","SCENE","PLAY"]}
+      {"id":"seq","title":"SEQ","params":["CHORD","LEVEL","SCENE","PLAY"]}
     ]
   }
 ] as const;
