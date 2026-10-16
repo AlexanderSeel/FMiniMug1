@@ -57,9 +57,6 @@ function findEmcc(){
     return null;
   }
 
-  // When start-dev.ps1 launches us after `call emsdk_env.bat`, `emcc` is the
-  // canonical command regardless of whether the SDK ships emcc.bat or an
-  // extensionless Python launcher.
   if(probeCompiler('emcc',true))return {command:'emcc',shell:true,prefixArgs:[]};
 
   const python=process.env.EMSDK_PYTHON||process.env.PYTHON||'python';
@@ -149,6 +146,8 @@ const args=[
   '-Wl,--export=fmw_wasm_mini_note_on',
   '-Wl,--export=fmw_wasm_mini_note_off',
   '-Wl,--export=fmw_wasm_bass_param',
+  '-Wl,--export=fmw_wasm_bass_note_on',
+  '-Wl,--export=fmw_wasm_bass_note_off',
   '-Wl,--export=fmw_wasm_drum_voice_param',
   '-Wl,--export=fmw_wasm_drum_global_param',
   '-Wl,--export=fmw_wasm_drum_trigger',
