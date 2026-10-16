@@ -72,7 +72,7 @@ jobs:
         if: steps.beta.outputs.publish == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y emscripten zip
+          sudo apt-get install -y emscripten zip unzip
 
       - name: Set up Node
         if: steps.beta.outputs.publish == 'true'
@@ -149,7 +149,7 @@ jobs:
           ) > "$ROOT/SHA256SUMS"
           (cd release && zip -qr "out/FMiniMug1-${TAG}-windows-beta.zip" "FMiniMug1-${TAG}")
           (cd hardware && zip -qr "../release/out/FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip" .)
-          sha256sum release/out/*.zip > release/out/SHA256SUMS
+          (cd release/out && sha256sum *.zip > SHA256SUMS)
           cp "$ROOT/manifest.json" release/out/manifest.json
 
       - name: Verify release payload
@@ -159,17 +159,37 @@ jobs:
           TAG: ${{ steps.beta.outputs.tag }}
         run: |
           set -euo pipefail
-          test -s "release/out/FMiniMug1-${TAG}-windows-beta.zip"
-          test -s "release/out/FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip"
+          WINDOWS_ZIP="release/out/FMiniMug1-${TAG}-windows-beta.zip"
+          HARDWARE_ZIP="release/out/FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip"
+          test -s "$WINDOWS_ZIP"
+          test -s "$HARDWARE_ZIP"
           test -s release/out/SHA256SUMS
           test -s release/out/manifest.json
           (cd release/out && sha256sum -c SHA256SUMS)
+
+          # Smoke-check package layout before publishing.
+          unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/Install-FMiniMug1-Beta.ps1"
+          unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/Install-FMiniMug1-Beta.cmd"
+          unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/app/index.html"
+          unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/app/dsp/fminimug1.wasm"
+          unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/app/dsp/fminimug1-worklet.js"
+          if unzip -Z1 "$HARDWARE_ZIP" | grep -E '\.fwsc$'; then
+            echo "Safety failure: packaged hardware diagnostics contain .fwsc" >&2
+            exit 1
+          fi
+          unzip -Z1 "$HARDWARE_ZIP" | grep -Fx "HARDWARE-BETA-WARNING.txt"
+          unzip -Z1 "$HARDWARE_ZIP" | grep -Fx "fminimug1-workstation-stress.bin"
+
+          # Parse the Windows installer before shipping it.
+          pwsh -NoProfile -Command '$null=[ScriptBlock]::Create((Get-Content -Raw "scripts/Install-FMiniMug1-Beta.ps1")); Write-Host "PowerShell installer syntax OK"'
+
           python3 - <<'PY'
           import json
           m=json.load(open('release/out/manifest.json',encoding='utf-8'))
           assert m['virtual_installer'] is True
           assert m['hardware_installable'] is False
           assert m['hardware_flash_package'] is None
+          assert m['runtime'] == 'native C DSP via WASM'
           PY
 
       - name: Prepare beta release notes
