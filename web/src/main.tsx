@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import {FM1Workstation} from './FM1Workstation';
+import {FM1WorkstationNext} from './FM1WorkstationNext';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <FM1Workstation/>
+    <FM1WorkstationNext/>
   </React.StrictMode>
 );
