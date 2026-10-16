@@ -30,7 +30,7 @@ export type WorkstationScene={
 export class WorkstationEngine{
   ctx:AudioContext|null=null;
   private node:AudioWorkletNode|null=null;
-  private master:GainNode|null=null;
+  private output:GainNode|null=null;
   private starting:Promise<void>|null=null;
   private listeners=new Set<(m:WorkstationMeter)=>void>();
   private errorListeners=new Set<(message:string)=>void>();
@@ -58,9 +58,9 @@ export class WorkstationEngine{
         loadWasmBytes(assetUrl('dsp/fminimug1.wasm')),
         ctx.audioWorklet.addModule(assetUrl('dsp/fminimug1-worklet.js'))
       ]);
-      const master=ctx.createGain();master.gain.value=.72;master.connect(ctx.destination);
+      const output=ctx.createGain();output.gain.value=1;output.connect(ctx.destination);
       const node=new AudioWorkletNode(ctx,'fminimug1-dsp',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{wasmBytes:bytes,mode:'workstation'}});
-      node.connect(master);
+      node.connect(output);
       node.port.onmessage=e=>{
         if(e.data?.type==='meter'&&e.data?.mode==='workstation')for(const cb of this.listeners)cb({peak:e.data.peak,rms:e.data.rms,step:e.data.step??0});
         if(e.data?.type==='error'){
@@ -69,7 +69,7 @@ export class WorkstationEngine{
           this.emitError(message);
         }
       };
-      this.ctx=ctx;this.master=master;this.node=node;
+      this.ctx=ctx;this.output=output;this.node=node;
       if(ctx.state==='suspended')await ctx.resume();
     }catch(error){
       await ctx.close().catch(()=>undefined);
@@ -78,7 +78,7 @@ export class WorkstationEngine{
   }
 
   private send(message:unknown){this.node?.port.postMessage(message)}
-  setMaster(value:number){if(this.master)this.master.gain.value=Math.max(0,Math.min(1.2,value))}
+  setMaster(value:number){this.send({type:'level',part:4,value:Math.max(0,Math.min(1.2,value))})}
   setPartLevel(part:0|1|2|3,value:number){this.send({type:'level',part,value})}
   setFxParam(param:WorkstationFxParam,value:number){this.send({type:'fxParam',param,value})}
   setMiniParam(id:number,value:number){this.send({type:'miniParam',id,value})}
