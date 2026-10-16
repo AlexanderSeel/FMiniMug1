@@ -55,8 +55,10 @@ void fmw_seq_clock_process(fmw_seq_clock_t *clock, uint32_t frames, fmw_seq_step
   if (!clock || !clock->running || !frames) return;
   for (uint32_t i = 0u; i < frames; ++i) {
     if (clock->samples_left == 0u) {
-      if (callback) callback(clock->step, user);
+      /* Clients may use step_samples to derive a gate for the current swung
+       * step, so publish the exact current duration before the callback. */
       clock->step_samples = compute_step_samples(clock, clock->step);
+      if (callback) callback(clock->step, user);
       clock->samples_left = clock->step_samples;
       clock->step = (uint8_t)((clock->step + 1u) % clock->config.length);
     }
