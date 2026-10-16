@@ -54,7 +54,7 @@ static const fmw_page_desc_t FMW_BASS808_PAGES[] = {
 };
 
 static const fmw_page_desc_t FMW_ALPHA_PAGES[] = {
-  {"alpha", "ALPHA DIAL", "ALPHA DIAL", "PARAM", "PRESET", "CHORD"},
+  {"alpha", "ALPHA DIAL", "ALPHA DIAL", "FOCUS", "PRESET", "TONE MODIFY"},
   {"dco", "DCO", "SAW", "PULSE", "SUB", "NOISE"},
   {"vcf", "VCF", "CUTOFF", "RESO", "ENV", "KEYTRACK"},
   {"vca", "VCA", "LEVEL", "ENV MODE", "VELOCITY", "CHORUS MIX"},
