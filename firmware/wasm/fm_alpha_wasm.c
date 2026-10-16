@@ -40,7 +40,7 @@ void fma_wasm_set_param(int id, float value) {
     case 8: alpha.patch.level = value; break;
     case 9: alpha.patch.gate_vca = value >= 0.5f ? 1u : 0u; break;
     case 10: alpha.patch.velocity_amount = value; break;
-    case 11: break; /* PAN reserved until the workstation mixer becomes stereo. */
+    case 11: break;
     case 12: alpha.patch.attack_s = value; break;
     case 13: alpha.patch.decay_s = value; break;
     case 14: alpha.patch.sustain = value; break;
@@ -53,6 +53,12 @@ void fma_wasm_set_param(int id, float value) {
     case 21: alpha.patch.chorus_rate_hz = value; break;
     case 22: alpha.patch.chorus_depth = value; break;
     case 23: alpha.patch.chorus_mix = value; break;
+    case 24: alpha.patch.pulse_width = value; break;
+    case 25: alpha.patch.pwm_depth = value; break;
+    case 26: alpha.patch.pwm_rate_hz = value; break;
+    case 27: alpha.patch.hpf_cutoff_hz = value; break;
+    case 28: alpha.patch.dco_range_semitones = (int8_t)value; break;
+    case 29: alpha.patch.dco_env_amount = value; break;
     default: break;
   }
 }
