@@ -1,4 +1,5 @@
 #include "fm_workstation_seq.h"
+#include "fm_workstation_fx.h"
 #include "fm_bass808.h"
 #include "fm_drum808.h"
 #include "fm_alpha.h"
@@ -45,6 +46,7 @@ typedef struct {
 static fmb808_t bass;
 static fmd808_t drums;
 static fma_t alpha;
+static fmw_fx_t fx;
 static fmw_seq_clock_t clock_state;
 static fmw_mini_step_t mini_steps[FMW_PATTERN_STEPS];
 static fmw_bass_step_t bass_steps[FMW_PATTERN_STEPS];
@@ -156,6 +158,7 @@ void fmw_wasm_init(float sample_rate) {
   fmb808_init(&bass, sample_rate);
   fmd808_init(&drums, sample_rate);
   fma_init(&alpha, sample_rate);
+  fmw_fx_init(&fx, sample_rate);
   fmw_seq_clock_init(&clock_state, sample_rate);
   clear_patterns();
   mini_gate_left = 0u;
@@ -185,6 +188,13 @@ void fmw_wasm_set_level(int part, float value) {
   else if (part == 1) drum_level = value;
   else if (part == 2) bass_level = value;
   else if (part == 3) alpha_level = value;
+}
+
+__attribute__((visibility("default")))
+void fmw_wasm_set_fx(int param, float value) {
+  ensure_init();
+  if (param < (int)FMW_FX_DELAY || param > (int)FMW_FX_DRIVE) return;
+  fmw_fx_set_param(&fx, (fmw_fx_param_t)param, value);
 }
 
 __attribute__((visibility("default")))
@@ -401,9 +411,7 @@ uintptr_t fmw_wasm_render(int frames) {
     sample += fmd808_process(&drums) * drum_level;
     sample += fmb808_process(&bass) * bass_level;
     sample += fma_process(&alpha) * alpha_level;
-    if (sample > 1.0f) sample = 1.0f;
-    if (sample < -1.0f) sample = -1.0f;
-    output[i] = sample;
+    output[i] = fmw_fx_process(&fx, sample);
   }
   return (uintptr_t)output;
 }
