@@ -10,11 +10,11 @@ export const WORKSTATION_PARTS=[
     "polyphony": 1,
     "pages": [
       {"id":"osc","title":"OSC","params":["OSC1","OSC2","OSC3","GLIDE"]},
-      {"id":"mix","title":"MIX","params":["OSC MIX","DRIVE","FEEDBACK","NOISE"]},
+      {"id":"mix","title":"MIX","params":["MIX DRIVE","FILTER DRIVE","FEEDBACK","2X OS"]},
       {"id":"filter","title":"FILTER","params":["CUTOFF","RESO","CONTOUR","KEYTRACK"]},
       {"id":"env","title":"ENV","params":["ATTACK","DECAY","SUSTAIN","RELEASE"]},
-      {"id":"mod","title":"MOD","params":["DRIFT","OSC3 MOD","PRIORITY","RETRIG"]},
-      {"id":"seq","title":"SEQ","params":["TEMPO","WINDOW","PATTERN","PLAY"]}
+      {"id":"mod","title":"MOD","params":["DRIFT","GLIDE MODE","PRIORITY","RETRIG"]},
+      {"id":"seq","title":"SEQ","params":["TEMPO","STEP","SCENE","PLAY"]}
     ]
   },
   {
@@ -22,12 +22,12 @@ export const WORKSTATION_PARTS=[
     "c": "FMW_PART_DRUM808",
     "title": "808 DRUM",
     "subtitle": "analog drum machine",
-    "polyphony": 11,
+    "polyphony": 8,
     "pages": [
       {"id":"kit","title":"KIT","params":["VOICE","LEVEL","TUNE","DECAY"]},
-      {"id":"tone","title":"TONE","params":["TONE","SNAPPY","ATTACK","COLOR"]},
+      {"id":"tone","title":"TONE","params":["TONE","ACCENT","DRIVE","TRIGGER"]},
       {"id":"mix","title":"MIX","params":["BD","SD","HATS","PERC"]},
-      {"id":"seq","title":"SEQ","params":["STEP","ACCENT","FLAM","PROB"]},
+      {"id":"seq","title":"SEQ","params":["STEP","HIT","ACCENT","VOICE"]},
       {"id":"perf","title":"PERF","params":["SWING","FILL","MUTE","PATTERN"]}
     ]
   },
@@ -41,7 +41,7 @@ export const WORKSTATION_PARTS=[
       {"id":"osc","title":"OSC","params":["WAVE","TUNE","SUB","DRIVE"]},
       {"id":"filter","title":"FILTER","params":["CUTOFF","RESO","ENV MOD","ACCENT"]},
       {"id":"env","title":"ENV","params":["DECAY","SLIDE","GATE","ACC DECAY"]},
-      {"id":"seq","title":"SEQ","params":["NOTE","ACCENT","SLIDE","OCTAVE"]},
+      {"id":"seq","title":"SEQ","params":["STEP","NOTE","ACCENT","SLIDE"]},
       {"id":"perf","title":"PERF","params":["TEMPO","SWING","PATTERN","PLAY"]}
     ]
   },
@@ -54,11 +54,11 @@ export const WORKSTATION_PARTS=[
     "pages": [
       {"id":"dco","title":"DCO","params":["SAW","PULSE","SUB","NOISE"]},
       {"id":"vcf","title":"VCF","params":["CUTOFF","RESO","ENV","KEYTRACK"]},
-      {"id":"vca","title":"VCA","params":["LEVEL","ENV MODE","VELOCITY","PAN"]},
+      {"id":"vca","title":"VCA","params":["LEVEL","ENV MODE","VELOCITY","CHORUS MIX"]},
       {"id":"env","title":"ENV","params":["ATTACK","DECAY","SUSTAIN","RELEASE"]},
       {"id":"lfo","title":"LFO","params":["RATE","DELAY","DCO MOD","VCF MOD"]},
       {"id":"chorus","title":"CHORUS","params":["MODE","RATE","DEPTH","MIX"]},
-      {"id":"seq","title":"SEQ","params":["CHORD","GATE","PATTERN","PLAY"]}
+      {"id":"seq","title":"SEQ","params":["CHORD","GATE","SCENE","PLAY"]}
     ]
   }
 ] as const;
