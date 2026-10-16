@@ -27,45 +27,37 @@ installer/           installer/recovery integration notes
 
 The current virtual hardware is WASM-first: `npm run dev` builds the native DSP before starting Vite.
 
-### Windows
+### Windows — one command
 
-Install the Emscripten SDK once, then open a terminal in the emsdk folder and activate it for that terminal session.
-
-**Command Prompt:**
-
-```bat
-emsdk install latest
-emsdk activate latest
-emsdk_env.bat
-```
-
-**PowerShell:**
+From the repository root, run:
 
 ```powershell
-.\emsdk install latest
-.\emsdk activate latest
-.\emsdk_env.bat
+.\start-dev.ps1
 ```
 
-After activation, verify:
+The script automatically:
+
+- checks Git, Node.js and npm;
+- finds an existing Emscripten SDK or clones one if missing;
+- installs/activates the latest Emscripten toolchain;
+- sets `EMSDK` for the current process;
+- installs npm dependencies if `node_modules` is missing;
+- builds the unified WASM workstation;
+- starts Vite.
+
+If your Emscripten SDK is in a custom location, pass it explicitly:
 
 ```powershell
-emcc --version
-node --version
-npm --version
+.\start-dev.ps1 -EmsdkPath "D:\tools\emsdk"
 ```
 
-Then start FMiniMug1:
+To skip reinstalling/updating Emscripten on a later run:
 
 ```powershell
-cd web
-npm install
-npm run dev
+.\start-dev.ps1 -SkipEmsdkUpdate
 ```
 
 The WASM build entry point is cross-platform Node code (`scripts/build_wasm.mjs`). On Windows it invokes `emcc.bat`; on macOS/Linux it invokes `emcc`. No Bash or `sh` is required for `npm run dev` or `npm run build:dsp`.
-
-If `emcc` is not visible in a new terminal, run `emsdk_env.bat` again in that terminal before starting the project.
 
 ### macOS / Linux
 
