@@ -51,7 +51,13 @@ def main() -> int:
               "-c", str(target / "fm1_target_main.c"), "-o", str(target_main)])
 
     extra_objects = []
-    for source_name in ("fm_bass808.c", "fm_drum808.c", "fm_alpha.c"):
+    for source_name in (
+        "fm_bass808.c",
+        "fm_drum808.c",
+        "fm_alpha.c",
+        "fm_workstation_state.c",
+        "fm_workstation_runtime.c",
+    ):
         src = portable / source_name
         obj = base.OUT / f"workstation_{src.stem}.o"
         base.run([str(cc), "-target", "pi32v2", *base.CFLAGS, *inc, *defs,
@@ -125,6 +131,7 @@ def main() -> int:
         "control_map=not-required-workstation-stress",
         "audio_budget_ticks=69632",
         "load=MINI-2x+808-BASS+808-DRUM+ALPHA-6+chorus",
+        "portable_runtime=compiled",
         f"softfloat_runtime={runtime.name}",
     ]
     (base.OUT / "WORKSTATION-STRESS-INFO.txt").write_text("\n".join(info) + "\n")
