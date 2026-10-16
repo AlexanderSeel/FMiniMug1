@@ -14,10 +14,23 @@ function windowsEmsdkCandidates(){
   const candidates=[];
   const seen=new Set();
   const add=p=>{if(p&&!seen.has(p)){seen.add(p);candidates.push(p)}};
-  const fromSdk=base=>add(join(base,'upstream','emscripten','emcc.bat'));
+  const fromSdk=base=>{
+    add(join(base,'upstream','emscripten','emcc.bat'));
+    add(join(base,'upstream','emscripten','emcc'));
+    add(join(base,'upstream','emscripten','emcc.py'));
+  };
 
   if(process.env.EMSDK)fromSdk(process.env.EMSDK);
-  if(process.env.EMSCRIPTEN) add(join(process.env.EMSCRIPTEN,'emcc.bat'));
+  if(process.env.EMSCRIPTEN_ROOT){
+    add(join(process.env.EMSCRIPTEN_ROOT,'emcc.bat'));
+    add(join(process.env.EMSCRIPTEN_ROOT,'emcc'));
+    add(join(process.env.EMSCRIPTEN_ROOT,'emcc.py'));
+  }
+  if(process.env.EMSCRIPTEN){
+    add(join(process.env.EMSCRIPTEN,'emcc.bat'));
+    add(join(process.env.EMSCRIPTEN,'emcc'));
+    add(join(process.env.EMSCRIPTEN,'emcc.py'));
+  }
 
   let current=root;
   while(true){
@@ -28,30 +41,38 @@ function windowsEmsdkCandidates(){
   }
 
   fromSdk(join(os.homedir(),'emsdk'));
-
   const drive=parse(root).root;
   if(drive)fromSdk(join(drive,'emsdk'));
-
   return candidates;
 }
 
-function probeCompiler(command,shell=false){
-  const probe=spawnSync(command,['--version'],{cwd:root,encoding:'utf8',shell});
+function probeCompiler(command,shell=false,prefixArgs=[]){
+  const probe=spawnSync(command,[...prefixArgs,'--version'],{cwd:root,encoding:'utf8',shell});
   return !probe.error&&probe.status===0;
 }
 
 function findEmcc(){
   if(process.platform!=='win32'){
-    if(probeCompiler('emcc'))return {command:'emcc',shell:false};
+    if(probeCompiler('emcc'))return {command:'emcc',shell:false,prefixArgs:[]};
     return null;
   }
 
-  if(probeCompiler('emcc.bat',true))return {command:'emcc.bat',shell:true};
+  // When start-dev.ps1 launches us after `call emsdk_env.bat`, `emcc` is the
+  // canonical command regardless of whether the SDK ships emcc.bat or an
+  // extensionless Python launcher.
+  if(probeCompiler('emcc',true))return {command:'emcc',shell:true,prefixArgs:[]};
 
+  const python=process.env.EMSDK_PYTHON||process.env.PYTHON||'python';
   for(const candidate of windowsEmsdkCandidates()){
-    if(existsSync(candidate)&&probeCompiler(candidate,true)){
-      console.log(`using Emscripten compiler: ${candidate}`);
-      return {command:candidate,shell:true};
+    if(!existsSync(candidate))continue;
+    if(candidate.toLowerCase().endsWith('.bat')){
+      if(probeCompiler(candidate,true)){
+        console.log(`using Emscripten compiler: ${candidate}`);
+        return {command:candidate,shell:true,prefixArgs:[]};
+      }
+    }else if(probeCompiler(python,false,[candidate])){
+      console.log(`using Emscripten compiler via Python: ${candidate}`);
+      return {command:python,shell:false,prefixArgs:[candidate]};
     }
   }
   return null;
@@ -61,11 +82,8 @@ const compiler=findEmcc();
 if(!compiler){
   console.error('error: Emscripten compiler not found.');
   if(process.platform==='win32'){
-    console.error('Expected either emcc.bat on PATH or an emsdk installation discoverable via EMSDK.');
-    console.error('Recommended PowerShell setup:');
-    console.error('  $env:EMSDK="D:\\path\\to\\emsdk"');
-    console.error('  npm run dev');
-    console.error('The builder also auto-detects emsdk folders next to parent folders of this repository.');
+    console.error('Run the project through .\\start-dev.ps1 so emsdk_env.bat and npm share the same environment.');
+    console.error('Alternatively activate emsdk in CMD and verify that `emcc --version` works before npm run dev.');
   }else{
     console.error('Install Emscripten and make emcc available on PATH.');
   }
@@ -147,7 +165,7 @@ const args=[
   '-o',outFile
 ];
 
-const result=spawnSync(compiler.command,args,{cwd:root,stdio:'inherit',shell:compiler.shell});
+const result=spawnSync(compiler.command,[...compiler.prefixArgs,...args],{cwd:root,stdio:'inherit',shell:compiler.shell});
 if(result.error){console.error(result.error);process.exit(2)}
 if(result.status!==0)process.exit(result.status??1);
 console.log(`built ${outFile} with unified MINI + 808 BASS + 808 DRUM + ALPHA workstation renderer`);
