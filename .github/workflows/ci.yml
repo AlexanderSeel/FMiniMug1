@@ -44,7 +44,7 @@ jobs:
           python3 scripts/generate_params.py
           python3 scripts/generate_workstation.py
           git diff --exit-code -- firmware/include/fm_params.h web/src/generated/params.ts firmware/include/fm_workstation_ui.h web/src/generated/workstation.ts
-      - name: Compile portable DSP, workstation state, sequencer, FX, Studio, app, diagnostics, browser ABI and UI
+      - name: Compile portable DSP, workstation runtime/state/sequencer/FX, Studio, app, diagnostics, browser ABI and UI
         run: |
           mkdir -p build
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
@@ -52,6 +52,7 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_drum808.c -o build/fm_drum808.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_alpha.c -o build/fm_alpha.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_state.c -o build/fm_workstation_state.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_runtime.c -o build/fm_workstation_runtime.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_seq.c -o build/fm_workstation_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_fx.c -o build/fm_workstation_fx.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
@@ -62,7 +63,7 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
       - name: Verify DSP hot path has no libm dependencies
         run: |
-          if nm -u build/fm_voice.o build/fm_studio.o build/fm_bass808.o build/fm_drum808.o build/fm_alpha.o build/fm_workstation_seq.o build/fm_workstation_fx.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
+          if nm -u build/fm_voice.o build/fm_studio.o build/fm_bass808.o build/fm_drum808.o build/fm_alpha.o build/fm_workstation_seq.o build/fm_workstation_fx.o build/fm_workstation_runtime.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
             echo 'unexpected libm dependency in portable real-time DSP' >&2
             exit 1
           fi
@@ -109,6 +110,10 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_workstation_state.c tests/test_workstation_state.c -o build/test_workstation_state
           ./build/test_workstation_state
+      - name: Run workstation runtime state tests
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_workstation_state.c firmware/src/fm_workstation_runtime.c tests/test_workstation_runtime.c -lm -o build/test_workstation_runtime
+          ./build/test_workstation_runtime
       - name: Run workstation shared sample-clock tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_workstation_seq.c tests/test_workstation_seq.c -o build/test_workstation_seq
