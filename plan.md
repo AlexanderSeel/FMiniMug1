@@ -9,7 +9,7 @@ Build a compact four-part performance workstation for the M-VAVE FM-1 around fou
 3. **808 BASS** — an original acid/bassline monosynth with accent and slide behavior.
 4. **ALPHA** — an original six-voice DCO/VCF/VCA poly synth inspired by Alpha-Juno-era architecture and performance controls.
 
-The implementation uses original DSP, UI graphics, presets and patterns. Roland/Moog branding, ROMs, factory presets and trade dress are not copied.
+The implementation uses original DSP, UI graphics, presets and patterns. Roland/Moog branding, ROMs and factory binary data are not copied.
 
 ## Non-negotiable architecture rules
 
@@ -52,9 +52,11 @@ Source of truth: `shared/workstation.json`.
 - [x] PC-keyboard + pointer/touch audition through the selected part.
 - [x] Correct FM-1 OCT− / OCT+ keyboard-octave behavior in virtual mode.
 - [x] Remove fake parameter labels that had no matching engine implementation.
-- [x] Global MIXER / SCENE / CLOCK pages have working virtual state; unsupported FX controls show N/A.
+- [x] Global MIXER / SCENE / CLOCK pages have working virtual state.
+- [x] Native global FX page with delay / ambience / drive / master.
 - [x] SAVE stores a local virtual snapshot; SCENE page exposes explicit SAVE/LOAD encoder-press actions.
-- [x] MINI / DRUM / BASS / ALPHA SEQ pages now map to real sample-clock lane state.
+- [x] MINI / DRUM / BASS / ALPHA SEQ pages map to real sample-clock lane state.
+- [x] Virtual panel rebuilt around one 27-key FM-1 silicone keybed instead of a duplicated fake function-key row.
 - [ ] Compile the actual native 240×240 renderer to WASM/canvas for pixel-identical preview.
 - [ ] Move remaining browser-only global state into shared/native C state.
 
@@ -66,7 +68,8 @@ Source of truth: `shared/workstation.json`.
 - [x] Native host stability + simultaneous-hit stress tests.
 - [x] Native C engine exported to WASM/AudioWorklet.
 - [x] Browser FM-1 keyboard-pad audition through the unified workstation WASM instance.
-- [x] 16-step hit/accent pattern representation and four demo patterns.
+- [x] 16-step hit/accent pattern representation.
+- [x] 4 energetic regression patterns + 4 calmer/spacious demo patterns.
 - [x] Virtual KIT / TONE / MIX / SEQ / PERF pages wired to real implemented controls.
 - [x] Native live step editing for STEP / HIT / ACCENT / VOICE.
 - [x] Group mixer controls for BD / SD / HATS / PERC.
@@ -82,11 +85,12 @@ Source of truth: `shared/workstation.json`.
 - [x] Envelope modulation, accent and true slide retargeting without envelope retrigger.
 - [x] Native accent/slide/stability tests.
 - [x] Native C engine exported to WASM/AudioWorklet.
-- [x] Live audition now uses the same unified workstation WASM instance as every other part.
+- [x] Live audition uses the same unified workstation WASM instance as every other part.
 - [x] Virtual OSC/FILTER/ENV controls.
 - [x] Editable 16-step note/accent/slide/gate state.
 - [x] Native sample-clock sequence setters allow live STEP / NOTE / ACCENT / SLIDE editing while running.
-- [x] 6 original test presets and 4 original acid/bassline patterns.
+- [x] 6 original test presets.
+- [x] 4 energetic acid/bassline patterns + 4 calmer/spacious demo patterns.
 - [x] PERF page controls shared tempo / swing / scene / play.
 - [ ] 32/64-step editing and pattern paging.
 - [ ] Transpose / rotate / mutation / scale lock.
@@ -104,14 +108,18 @@ Source of truth: `shared/workstation.json`.
 - [x] Native C engine exported to WASM/AudioWorklet.
 - [x] DCO/VCF/VCA/ENV/LFO/CHORUS virtual pages.
 - [x] Six-key polyphonic virtual hardware test through the unified workstation instance.
+- [x] Native PWM / pulse width / PWM rate-depth.
+- [x] Native HPF, DCO range and DCO envelope pitch modulation.
+- [x] Dedicated ALPHA DIAL main page on KNOB1 with parameter navigation and live value editing.
 - [x] 8 original initial presets.
+- [x] 128 Alpha-Juno-style factory-bank positions/names mapped onto original modeled DSP patches (no Roland ROM/SysEx bundled).
 - [x] Real JieLi full-load image can link with six ALPHA voices + chorus and the other V2 engines.
 - [x] Native-clock four-note ALPHA chord lane with editable STEP / CHORD / GATE / PLAY.
 - [x] ALPHA transport no longer depends on browser-held chord notes.
-- [ ] PWM.
+- [ ] Alpha Dial PARAM/VALUE focus toggle and dedicated Tone Modify macro mode on the main screen.
+- [ ] Optional user-supplied SysEx import/conversion for closer factory-patch translation.
 - [ ] Sustain pedal / richer chord memory.
 - [ ] Stereo/pan implementation after workstation mixer becomes stereo.
-- [ ] 32+ original factory presets.
 - [ ] Real-device CPU measurement with six voices + chorus.
 
 ## Milestone F — Shared sequencer / song workflow 🚧
@@ -137,15 +145,18 @@ Source of truth: `shared/workstation.json`.
 
 - [x] Unified WASM mixer renders MINI + 808 DRUM + 808 BASS + ALPHA in one AudioWorklet instance.
 - [x] Per-part level API and working virtual global MIXER page.
+- [x] Portable bounded-memory workstation delay / ambience / drive block.
+- [x] FX block uses fixed int16 delay memory to reduce RAM cost.
+- [x] FX stability and wet-tail regression tests.
+- [x] Working virtual FX page wired into the native WASM mix.
 - [x] First 5 V2 demo scenes defined as regression material.
+- [x] Default V2 scenes retuned to calmer sparse patterns for easier musical testing.
 - [x] Scene selection can be changed from FM-1-style controls and reloaded during transport.
 - [x] Shared BPM/swing controls update native sequence metadata.
 - [x] Scene changes seed MINI and ALPHA lane material as well as BASS/DRUM patterns.
 - [x] Virtual local snapshot SAVE/LOAD includes all four sequencer lanes.
 - [ ] Four-part hardware mixer runtime.
-- [ ] Global delay.
-- [ ] Resource-bounded reverb/ambience.
-- [ ] Master drive/limiter.
+- [ ] Port resource-bounded FX into the mapped FM-1 hardware runtime after RAM/CPU budget validation.
 - [ ] Atomic scene recall at an audio-safe boundary.
 - [ ] 12+ full factory scenes.
 
@@ -184,15 +195,16 @@ Source of truth: `shared/workstation.json`.
 ## Milestone I — Presets / demos / regression content 🚧
 
 - [x] Existing MINI factory content retained.
-- [x] 4 initial 808 DRUM demo patterns.
+- [x] 8 808 DRUM demo/regression patterns (4 energetic + 4 calm).
 - [x] 6 initial 808 BASS presets.
-- [x] 4 initial 808 BASS accent/slide patterns.
-- [x] 8 initial ALPHA presets.
-- [x] 5 initial full V2 scene definitions.
+- [x] 8 808 BASS patterns (4 energetic + 4 calm).
+- [x] 8 original ALPHA presets.
+- [x] 128 modeled Alpha-Juno-style factory-bank positions/names without bundled factory binary data.
+- [x] 5 full V2 scene definitions.
+- [x] The default five V2 scenes now use calmer sparse demo material.
 - [x] Scene-derived starter MINI and ALPHA lane material for the current five V2 scenes.
 - [ ] 8+ drum kits / 24+ drum patterns.
 - [ ] 24+ bass patterns.
-- [ ] 32+ ALPHA presets.
 - [ ] 12+ full four-part scenes.
 - [ ] Per-engine calibration content and golden renders.
 
@@ -233,7 +245,7 @@ fminimug1-synth-check.bin          # synthetic controls, do not use as mapped fi
 
 ## Immediate implementation order
 
-1. Implement resource-bounded global delay / ambience / master character and make the FX page real instead of N/A.
+1. Finish ALPHA Dial PARAM/VALUE focus and Tone Modify behavior on the virtual main screen.
 2. Move mixer/scene/transport lane state into a portable native workstation runtime shared by WASM and the future hardware runtime.
 3. Add browser interaction regression tests for key-down/up, encoder turn/press, page navigation and transport.
 4. Add independent per-part pattern length/paging and then probability/motion data.
