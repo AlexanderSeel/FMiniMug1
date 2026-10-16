@@ -40,6 +40,44 @@ export const DRUM808_PATTERNS:Drum808Pattern[]=[
       step(hit(B,CH),hit(B)),step(hit(CB)),step(hit(S)),step(hit(CH,R)),
       step(hit(B)),step(hit(CH)),step(hit(T,CP),hit(CP)),step(hit(OH,R))
     ]
+  },
+
+  // Calmer demo grooves: deliberate gaps, fewer hats, accents only on structural hits.
+  {
+    name:'Soft Eight',bpm:96,swing:4,
+    steps:[
+      step(hit(B,CH),hit(B)),step(0),step(hit(CH)),step(0),
+      step(hit(S,CH),hit(S)),step(0),step(hit(CH)),step(0),
+      step(hit(B,CH),hit(B)),step(0),step(hit(CH)),step(0),
+      step(hit(S,OH),hit(S)),step(0),step(hit(CH)),step(0)
+    ]
+  },
+  {
+    name:'After Hours',bpm:104,swing:10,
+    steps:[
+      step(hit(B,CH),hit(B)),step(0),step(0),step(hit(CH)),
+      step(hit(S),hit(S)),step(0),step(hit(CH)),step(0),
+      step(hit(B,CH)),step(0),step(0),step(hit(CH)),
+      step(hit(S,CP),hit(S)),step(0),step(hit(CH)),step(hit(OH))
+    ]
+  },
+  {
+    name:'Half Light',bpm:88,swing:6,
+    steps:[
+      step(hit(B),hit(B)),step(0),step(hit(CH)),step(0),
+      step(0),step(0),step(hit(S,CH),hit(S)),step(0),
+      step(hit(B)),step(0),step(hit(CH)),step(0),
+      step(0),step(0),step(hit(S,OH),hit(S)),step(0)
+    ]
+  },
+  {
+    name:'Quiet Machine',bpm:108,swing:8,
+    steps:[
+      step(hit(B,CH),hit(B)),step(0),step(hit(CH)),step(0),
+      step(hit(S),hit(S)),step(0),step(0),step(hit(CH)),
+      step(hit(B)),step(0),step(hit(CH)),step(0),
+      step(hit(S),hit(S)),step(0),step(hit(R)),step(hit(OH))
+    ]
   }
 ];
 
