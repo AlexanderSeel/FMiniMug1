@@ -1,7 +1,8 @@
 import {spawnSync} from 'node:child_process';
-import {mkdirSync} from 'node:fs';
+import {existsSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {dirname,resolve} from 'node:path';
+import {dirname,resolve,parse,join} from 'node:path';
+import os from 'node:os';
 
 const here=dirname(fileURLToPath(import.meta.url));
 const root=resolve(here,'..');
@@ -9,7 +10,68 @@ const outDir=resolve(root,'web','public','dsp');
 const outFile=resolve(outDir,'fminimug1.wasm');
 mkdirSync(outDir,{recursive:true});
 
-const emcc=process.platform==='win32'?'emcc.bat':'emcc';
+function windowsEmsdkCandidates(){
+  const candidates=[];
+  const seen=new Set();
+  const add=p=>{if(p&&!seen.has(p)){seen.add(p);candidates.push(p)}};
+  const fromSdk=base=>add(join(base,'upstream','emscripten','emcc.bat'));
+
+  if(process.env.EMSDK)fromSdk(process.env.EMSDK);
+  if(process.env.EMSCRIPTEN) add(join(process.env.EMSCRIPTEN,'emcc.bat'));
+
+  let current=root;
+  while(true){
+    fromSdk(join(current,'emsdk'));
+    const parent=dirname(current);
+    if(parent===current)break;
+    current=parent;
+  }
+
+  fromSdk(join(os.homedir(),'emsdk'));
+
+  const drive=parse(root).root;
+  if(drive)fromSdk(join(drive,'emsdk'));
+
+  return candidates;
+}
+
+function probeCompiler(command,shell=false){
+  const probe=spawnSync(command,['--version'],{cwd:root,encoding:'utf8',shell});
+  return !probe.error&&probe.status===0;
+}
+
+function findEmcc(){
+  if(process.platform!=='win32'){
+    if(probeCompiler('emcc'))return {command:'emcc',shell:false};
+    return null;
+  }
+
+  if(probeCompiler('emcc.bat',true))return {command:'emcc.bat',shell:true};
+
+  for(const candidate of windowsEmsdkCandidates()){
+    if(existsSync(candidate)&&probeCompiler(candidate,true)){
+      console.log(`using Emscripten compiler: ${candidate}`);
+      return {command:candidate,shell:true};
+    }
+  }
+  return null;
+}
+
+const compiler=findEmcc();
+if(!compiler){
+  console.error('error: Emscripten compiler not found.');
+  if(process.platform==='win32'){
+    console.error('Expected either emcc.bat on PATH or an emsdk installation discoverable via EMSDK.');
+    console.error('Recommended PowerShell setup:');
+    console.error('  $env:EMSDK="D:\\path\\to\\emsdk"');
+    console.error('  npm run dev');
+    console.error('The builder also auto-detects emsdk folders next to parent folders of this repository.');
+  }else{
+    console.error('Install Emscripten and make emcc available on PATH.');
+  }
+  process.exit(2);
+}
+
 const args=[
   '-O3','-std=c11','-Ifirmware/include',
   'firmware/src/fm_voice.c',
@@ -85,14 +147,7 @@ const args=[
   '-o',outFile
 ];
 
-const probe=spawnSync(emcc,['--version'],{cwd:root,encoding:'utf8',shell:process.platform==='win32'});
-if(probe.error||probe.status!==0){
-  console.error(`error: ${emcc} not found or not usable.`);
-  console.error('Install/activate Emscripten first. On Windows, run emsdk_env.bat in the terminal before npm run dev.');
-  process.exit(2);
-}
-
-const result=spawnSync(emcc,args,{cwd:root,stdio:'inherit',shell:process.platform==='win32'});
+const result=spawnSync(compiler.command,args,{cwd:root,stdio:'inherit',shell:compiler.shell});
 if(result.error){console.error(result.error);process.exit(2)}
 if(result.status!==0)process.exit(result.status??1);
 console.log(`built ${outFile} with unified MINI + 808 BASS + 808 DRUM + ALPHA workstation renderer`);
