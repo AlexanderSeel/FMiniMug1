@@ -13,6 +13,15 @@ static float saturate(float value) {
   return value * (1.5f - 0.5f * value * value);
 }
 
+static float sample_from_i16(int16_t value) {
+  return (float)value * (1.0f / 32768.0f);
+}
+
+static int16_t sample_to_i16(float value) {
+  float limited = clampf(value, -0.999969f, 0.999969f);
+  return (int16_t)(limited * 32768.0f);
+}
+
 void fmw_fx_init(fmw_fx_t *fx, float sample_rate) {
   if (!fx) return;
   memset(fx, 0, sizeof(*fx));
@@ -39,13 +48,14 @@ float fmw_fx_process(fmw_fx_t *fx, float input) {
   if (!fx) return input;
 
   uint16_t read = (uint16_t)((fx->delay_pos + FMW_FX_DELAY_BUFFER - fx->delay_samples) % FMW_FX_DELAY_BUFFER);
-  float delayed = fx->delay_buffer[read];
-  fx->delay_buffer[fx->delay_pos] = clampf(input + delayed * fx->delay_feedback, -2.0f, 2.0f);
+  float delayed = sample_from_i16(fx->delay_buffer[read]);
+  float delay_write = input + delayed * fx->delay_feedback;
+  fx->delay_buffer[fx->delay_pos] = sample_to_i16(delay_write);
   fx->delay_pos = (uint16_t)((fx->delay_pos + 1u) % FMW_FX_DELAY_BUFFER);
 
-  float ambience = fx->ambience_buffer[fx->ambience_pos];
+  float ambience = sample_from_i16(fx->ambience_buffer[fx->ambience_pos]);
   float ambience_in = input * 0.32f + delayed * 0.18f;
-  fx->ambience_buffer[fx->ambience_pos] = clampf(ambience_in + ambience * fx->ambience_feedback, -2.0f, 2.0f);
+  fx->ambience_buffer[fx->ambience_pos] = sample_to_i16(ambience_in + ambience * fx->ambience_feedback);
   fx->ambience_pos = (uint16_t)((fx->ambience_pos + 1u) % FMW_FX_AMBIENCE_BUFFER);
 
   float mixed = input + delayed * fx->delay_mix * 0.72f + ambience * fx->ambience_mix * 0.52f;
