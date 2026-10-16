@@ -138,6 +138,7 @@ __attribute__((visibility("default"))) void fmw_wasm_reset(void) { const float s
 __attribute__((visibility("default"))) void fmw_wasm_set_level(int part, float value) {
   ensure_init();
   if (part >= 0 && part < (int)FMW_RUNTIME_PART_COUNT) fmw_runtime_set_part_level(&runtime_state, (uint8_t)part, value);
+  else if (part == (int)FMW_RUNTIME_PART_COUNT) fmw_runtime_set_master(&runtime_state, value);
 }
 __attribute__((visibility("default"))) void fmw_wasm_set_fx(int param, float value) {
   ensure_init();
@@ -218,10 +219,10 @@ __attribute__((visibility("default"))) void fmw_wasm_alpha_note_off(int note) { 
 
 __attribute__((visibility("default"))) void fmw_wasm_seq_meta(int length, int bpm, int swing) {
   ensure_init();
-  fmw_runtime_set_clock(&runtime_state,
-      (uint8_t)(length < 0 ? 0 : length),
-      (uint16_t)(bpm < 0 ? 0 : bpm),
-      (uint8_t)(swing < 0 ? 0 : swing));
+  if (length < 1) length = 1; if (length > FMW_PATTERN_STEPS) length = FMW_PATTERN_STEPS;
+  if (bpm < 40) bpm = 40; if (bpm > 300) bpm = 300;
+  if (swing < 0) swing = 0; if (swing > 75) swing = 75;
+  fmw_runtime_set_clock(&runtime_state, (uint8_t)length, (uint16_t)bpm, (uint8_t)swing);
   fmw_seq_clock_configure(&clock_state, &runtime_state.clock);
 }
 __attribute__((visibility("default"))) void fmw_wasm_seq_mini_step(int index, int note, int velocity, int gate) {
@@ -253,7 +254,7 @@ __attribute__((visibility("default"))) uintptr_t fmw_wasm_render(int frames) {
     sample += fmd808_process(&drums) * runtime_state.part_level[FMW_PART_DRUM808];
     sample += fmb808_process(&bass) * runtime_state.part_level[FMW_PART_BASS808];
     sample += fma_process(&alpha) * runtime_state.part_level[FMW_PART_ALPHA];
-    output[i] = fmw_fx_process(&fx, sample);
+    output[i] = fmw_fx_process(&fx, sample) * runtime_state.master_level;
   }
   return (uintptr_t)output;
 }
