@@ -1,0 +1,5 @@
+/* Secondary input hints only; physical FM-1 note/function labels remain primary. */
+.fm1Keybed button kbd{display:block;position:absolute;right:5px;top:5px;margin:0;padding:1px 3px;border:1px solid #4a4a4a;border-radius:3px;background:#101010aa;color:#9a9a9a;font:600 5px/1 ui-monospace,Consolas,monospace;box-shadow:none;opacity:.72;pointer-events:none}
+.fm1Keybed button.held kbd{color:#ffe2d8;border-color:#a95543;background:#35130f}
+.fm1Keybed button:hover kbd,.fm1Keybed button:focus-visible kbd{opacity:1;color:#ddd}
+@media(max-width:1050px){.fm1Keybed button kbd{font-size:4.5px;right:3px;top:4px;padding:1px 2px}}
