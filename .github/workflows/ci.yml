@@ -50,6 +50,7 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_voice.c -o build/fm_voice.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_bass808.c -o build/fm_bass808.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_drum808.c -o build/fm_drum808.o
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_alpha.c -o build/fm_alpha.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_workstation_state.c -o build/fm_workstation_state.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_seq.c -o build/fm_seq.o
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/src/fm_ui.c -o build/fm_ui.o
@@ -59,7 +60,7 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include -c firmware/wasm/fm_voice_wasm.c -o build/fm_voice_wasm.o
       - name: Verify DSP hot path has no libm dependencies
         run: |
-          if nm -u build/fm_voice.o build/fm_studio.o build/fm_bass808.o build/fm_drum808.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
+          if nm -u build/fm_voice.o build/fm_studio.o build/fm_bass808.o build/fm_drum808.o build/fm_alpha.o | grep -E '[[:space:]](powf|expf|tanf|pow|exp|tan)$'; then
             echo 'unexpected libm dependency in portable real-time DSP' >&2
             exit 1
           fi
@@ -98,6 +99,10 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_drum808.c tests/test_drum808.c -lm -o build/test_drum808
           ./build/test_drum808
+      - name: Run ALPHA polyphony envelope chorus stability tests
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_alpha.c tests/test_alpha.c -lm -o build/test_alpha
+          ./build/test_alpha
       - name: Run workstation navigation parity tests
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Ifirmware/include firmware/src/fm_workstation_state.c tests/test_workstation_state.c -o build/test_workstation_state
