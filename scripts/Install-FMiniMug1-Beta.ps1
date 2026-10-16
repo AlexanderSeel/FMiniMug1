@@ -40,22 +40,34 @@ function Test-BetaPackage([string]$Root) {
   Write-Host 'Package checksums OK.' -ForegroundColor Green
 }
 
-$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$appSource = Join-Path $scriptRoot 'app'
-if (-not (Test-Path (Join-Path $appSource 'index.html'))) {
-  throw "Beta package is incomplete: app\index.html was not found next to this installer."
-}
-if (-not (Test-Path (Join-Path $appSource 'dsp\fminimug1.wasm'))) {
-  throw "Beta package is incomplete: app\dsp\fminimug1.wasm was not found."
-}
-if (-not (Test-Path (Join-Path $appSource 'dsp\fminimug1-worklet.js'))) {
-  throw "Beta package is incomplete: app\dsp\fminimug1-worklet.js was not found."
+function Stop-InstalledServer([string]$Root) {
+  $pidFile = Join-Path $Root 'server.pid'
+  if (-not (Test-Path $pidFile)) { return }
+  $serverPid = 0
+  if ([int]::TryParse((Get-Content $pidFile -Raw).Trim(), [ref]$serverPid)) {
+    $p = Get-Process -Id $serverPid -ErrorAction SilentlyContinue
+    if ($p -and $p.ProcessName -match 'powershell|pwsh') {
+      Write-Step "Stopping previous FMiniMug1 server (PID $serverPid)"
+      Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Milliseconds 250
+    }
+  }
+  Remove-Item -Force -ErrorAction SilentlyContinue $pidFile
 }
 
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$appSource = Join-Path $scriptRoot 'app'
+foreach ($required in @('index.html','dsp\fminimug1.wasm','dsp\fminimug1-worklet.js')) {
+  if (-not (Test-Path (Join-Path $appSource $required) -PathType Leaf)) {
+    throw "Beta package is incomplete: app\$required was not found next to this installer."
+  }
+}
 if (-not $SkipPackageVerification) { Test-BetaPackage $scriptRoot }
 
 Write-Step "Installing FMiniMug1 beta to $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+Stop-InstalledServer $InstallDir
+
 $appDir = Join-Path $InstallDir 'app'
 if (Test-Path $appDir) { Remove-Item -Recurse -Force $appDir }
 Copy-Item -Recurse -Force $appSource $appDir
@@ -68,119 +80,168 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $appDir = Join-Path $PSScriptRoot 'app'
-if (-not (Test-Path (Join-Path $appDir 'index.html'))) { throw "FMiniMug1 app files are missing." }
+$pidFile = Join-Path $PSScriptRoot 'server.pid'
+if (-not (Test-Path (Join-Path $appDir 'index.html') -PathType Leaf)) { throw 'FMiniMug1 app files are missing.' }
 
-function Find-Cmd([string[]]$Names) {
-  foreach ($n in $Names) {
-    $c = Get-Command $n -ErrorAction SilentlyContinue
-    if ($c) { return $c.Source }
-  }
-  return $null
+function Open-App([string]$Url) {
+  if (-not $NoBrowser) { Start-Process $Url }
+}
+
+function Test-Port([int]$TestPort) {
+  $client = [Net.Sockets.TcpClient]::new()
+  try {
+    $iar = $client.BeginConnect([Net.IPAddress]::Loopback,$TestPort,$null,$null)
+    if (-not $iar.AsyncWaitHandle.WaitOne(180)) { return $false }
+    $client.EndConnect($iar)
+    return $client.Connected
+  } catch { return $false } finally { $client.Dispose() }
 }
 
 $url = "http://127.0.0.1:$Port/"
-$node = Find-Cmd @('node.exe','node')
-$python = Find-Cmd @('python.exe','python','py.exe','py')
-
-if ($node) {
-  $server = Join-Path $PSScriptRoot 'serve.mjs'
-  if (-not (Test-Path $server)) { throw "serve.mjs is missing." }
-  if (-not $NoBrowser) { Start-Process $url }
-  & $node $server $appDir $Port
-  exit $LASTEXITCODE
+if (Test-Port $Port) {
+  Open-App $url
+  exit 0
 }
 
-if ($python) {
-  if (-not $NoBrowser) { Start-Process $url }
-  Push-Location $appDir
-  try {
-    if ((Split-Path -Leaf $python) -like 'py*') { & $python -3 -m http.server $Port --bind 127.0.0.1 }
-    else { & $python -m http.server $Port --bind 127.0.0.1 }
-  } finally { Pop-Location }
-  exit $LASTEXITCODE
+$mime = @{
+  '.html'='text/html; charset=utf-8'; '.js'='text/javascript; charset=utf-8'; '.mjs'='text/javascript; charset=utf-8';
+  '.css'='text/css; charset=utf-8'; '.wasm'='application/wasm'; '.json'='application/json; charset=utf-8';
+  '.svg'='image/svg+xml'; '.png'='image/png'; '.jpg'='image/jpeg'; '.jpeg'='image/jpeg'; '.ico'='image/x-icon';
+  '.woff'='font/woff'; '.woff2'='font/woff2'
 }
 
-throw "FMiniMug1 Beta needs Node.js or Python to run the local server. Install Node.js LTS and start again."
+$root = [IO.Path]::GetFullPath($appDir).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,$Port)
+try {
+  $listener.Start()
+  Set-Content -LiteralPath $pidFile -Value $PID -Encoding ASCII
+  Open-App $url
+
+  while ($true) {
+    $client = $listener.AcceptTcpClient()
+    try {
+      $client.ReceiveTimeout = 5000
+      $client.SendTimeout = 5000
+      $stream = $client.GetStream()
+      $reader = [IO.StreamReader]::new($stream,[Text.Encoding]::ASCII,$false,1024,$true)
+      $request = $reader.ReadLine()
+      if ([string]::IsNullOrWhiteSpace($request)) { continue }
+      while ($true) { $line=$reader.ReadLine(); if ([string]::IsNullOrEmpty($line)) { break } }
+
+      $parts = $request.Split(' ')
+      $method = if ($parts.Length -gt 0) { $parts[0].ToUpperInvariant() } else { '' }
+      $target = if ($parts.Length -gt 1) { $parts[1] } else { '/' }
+      if ($method -ne 'GET' -and $method -ne 'HEAD') {
+        $body=[Text.Encoding]::UTF8.GetBytes('Method not allowed')
+        $head="HTTP/1.1 405 Method Not Allowed`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n"
+        $hb=[Text.Encoding]::ASCII.GetBytes($head); $stream.Write($hb,0,$hb.Length); if($method-ne'HEAD'){$stream.Write($body,0,$body.Length)}
+        continue
+      }
+
+      $rawPath = ($target -split '\?',2)[0]
+      try { $decoded=[Uri]::UnescapeDataString($rawPath) } catch { $decoded='/' }
+      if ($decoded -eq '/') { $decoded='/index.html' }
+      $relative = $decoded.TrimStart('/').Replace('/',[IO.Path]::DirectorySeparatorChar)
+      $candidate = [IO.Path]::GetFullPath((Join-Path $appDir $relative))
+      if (-not $candidate.StartsWith($root,[StringComparison]::OrdinalIgnoreCase)) {
+        $body=[Text.Encoding]::UTF8.GetBytes('Forbidden')
+        $head="HTTP/1.1 403 Forbidden`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n"
+        $hb=[Text.Encoding]::ASCII.GetBytes($head); $stream.Write($hb,0,$hb.Length); if($method-ne'HEAD'){$stream.Write($body,0,$body.Length)}
+        continue
+      }
+      if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { $candidate=Join-Path $appDir 'index.html' }
+
+      $bytes=[IO.File]::ReadAllBytes($candidate)
+      $ext=[IO.Path]::GetExtension($candidate).ToLowerInvariant()
+      $contentType=if($mime.ContainsKey($ext)){$mime[$ext]}else{'application/octet-stream'}
+      $header="HTTP/1.1 200 OK`r`nContent-Type: $contentType`r`nContent-Length: $($bytes.Length)`r`nCache-Control: no-cache`r`nCross-Origin-Opener-Policy: same-origin`r`nCross-Origin-Embedder-Policy: require-corp`r`nConnection: close`r`n`r`n"
+      $headerBytes=[Text.Encoding]::ASCII.GetBytes($header)
+      $stream.Write($headerBytes,0,$headerBytes.Length)
+      if($method-ne'HEAD'){$stream.Write($bytes,0,$bytes.Length)}
+    } catch {
+      # Malformed/aborted browser requests must not stop the local app server.
+    } finally {
+      $client.Dispose()
+    }
+  }
+} finally {
+  $listener.Stop()
+  Remove-Item -Force -ErrorAction SilentlyContinue $pidFile
+}
 '@
 Set-Content -Path $launcher -Value $launcherContent -Encoding UTF8
 
-$serverPath = Join-Path $InstallDir 'serve.mjs'
-$serverContent = @'
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-
-const root=path.resolve(process.argv[2]||'.');
-const port=Number(process.argv[3]||8765);
-const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.wasm':'application/wasm','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.ico':'image/x-icon'};
-const safe=p=>{const full=path.resolve(root,'.'+p);return full===root||full.startsWith(root+path.sep)?full:null};
-const server=http.createServer((req,res)=>{
-  try {
-    const raw=(req.url||'/').split('?')[0];
-    let file=safe(raw==='/'?'/index.html':decodeURIComponent(raw));
-    if(!file){res.writeHead(403);res.end('Forbidden');return;}
-    if(!fs.existsSync(file)||fs.statSync(file).isDirectory())file=path.join(root,'index.html');
-    fs.readFile(file,(err,data)=>{
-      if(err){res.writeHead(404);res.end('Not found');return;}
-      res.writeHead(200,{
-        'Content-Type':mime[path.extname(file).toLowerCase()]||'application/octet-stream',
-        'Cache-Control':'no-cache',
-        'Cross-Origin-Opener-Policy':'same-origin',
-        'Cross-Origin-Embedder-Policy':'require-corp'
-      });
-      res.end(data);
-    });
-  } catch(err) {
-    res.writeHead(400);res.end('Bad request');
+$stopper = Join-Path $InstallDir 'Stop-FMiniMug1.ps1'
+$stopContent = @'
+$pidFile=Join-Path $PSScriptRoot 'server.pid'
+if(Test-Path $pidFile){
+  $id=0
+  if([int]::TryParse((Get-Content $pidFile -Raw).Trim(),[ref]$id)){
+    $p=Get-Process -Id $id -ErrorAction SilentlyContinue
+    if($p -and $p.ProcessName -match 'powershell|pwsh'){Stop-Process -Id $id -Force -ErrorAction SilentlyContinue}
   }
-});
-server.on('error',err=>{console.error(`FMiniMug1 local server failed: ${err.message}`);process.exitCode=1;});
-server.listen(port,'127.0.0.1',()=>console.log(`FMiniMug1 Beta running at http://127.0.0.1:${port}/`));
+  Remove-Item -Force -ErrorAction SilentlyContinue $pidFile
+}
 '@
-Set-Content -Path $serverPath -Value $serverContent -Encoding UTF8
+Set-Content -Path $stopper -Value $stopContent -Encoding UTF8
 
 $uninstaller = Join-Path $InstallDir 'Uninstall-FMiniMug1.ps1'
 $uninstallContent = @'
 $ErrorActionPreference='Stop'
+$pidFile=Join-Path $PSScriptRoot 'server.pid'
+if(Test-Path $pidFile){
+  $id=0
+  if([int]::TryParse((Get-Content $pidFile -Raw).Trim(),[ref]$id)){
+    $p=Get-Process -Id $id -ErrorAction SilentlyContinue
+    if($p -and $p.ProcessName -match 'powershell|pwsh'){Stop-Process -Id $id -Force -ErrorAction SilentlyContinue}
+  }
+}
 $desktop=[Environment]::GetFolderPath('Desktop')
-$start=[Environment]::GetFolderPath('StartMenu')
+$programs=Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $desktop 'FMiniMug1 Beta.lnk')
-Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $start 'Programs\FMiniMug1 Beta.lnk')
+Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $programs 'FMiniMug1 Beta.lnk')
+Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $programs 'Uninstall FMiniMug1 Beta.lnk')
 $root=$PSScriptRoot
 Write-Host "Removing $root"
-Start-Process powershell.exe -ArgumentList '-NoProfile','-Command',"Start-Sleep -Milliseconds 500; Remove-Item -Recurse -Force '$root'" -WindowStyle Hidden
+Start-Process powershell.exe -ArgumentList '-NoProfile','-Command',"Start-Sleep -Milliseconds 700; Remove-Item -Recurse -Force -LiteralPath '$($root.Replace("'","''"))'" -WindowStyle Hidden
 '@
 Set-Content -Path $uninstaller -Value $uninstallContent -Encoding UTF8
 
-function New-Shortcut([string]$Path) {
+function New-Shortcut([string]$Path,[string]$Target,[string]$Arguments,[string]$Description) {
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $shell.CreateShortcut($Path)
-  $shortcut.TargetPath = 'powershell.exe'
-  $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$launcher`""
+  $shortcut.TargetPath = $Target
+  $shortcut.Arguments = $Arguments
   $shortcut.WorkingDirectory = $InstallDir
-  $shortcut.Description = 'FMiniMug1 Workstation Beta'
+  $shortcut.Description = $Description
   $shortcut.Save()
 }
 
+$launcherArgs="-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$launcher`""
 if (-not $NoDesktopShortcut) {
-  $desktop = [Environment]::GetFolderPath('Desktop')
-  New-Shortcut (Join-Path $desktop 'FMiniMug1 Beta.lnk')
+  $desktop=[Environment]::GetFolderPath('Desktop')
+  New-Shortcut (Join-Path $desktop 'FMiniMug1 Beta.lnk') 'powershell.exe' $launcherArgs 'FMiniMug1 Workstation Beta'
 }
 if (-not $NoStartMenuShortcut) {
-  $programs = Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'
+  $programs=Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'
   New-Item -ItemType Directory -Force -Path $programs | Out-Null
-  New-Shortcut (Join-Path $programs 'FMiniMug1 Beta.lnk')
+  New-Shortcut (Join-Path $programs 'FMiniMug1 Beta.lnk') 'powershell.exe' $launcherArgs 'FMiniMug1 Workstation Beta'
+  $uninstallArgs="-NoProfile -ExecutionPolicy Bypass -File `"$uninstaller`""
+  New-Shortcut (Join-Path $programs 'Uninstall FMiniMug1 Beta.lnk') 'powershell.exe' $uninstallArgs 'Uninstall FMiniMug1 Workstation Beta'
 }
 
-$versionFile = Join-Path $scriptRoot 'VERSION.txt'
-if (Test-Path $versionFile) { Copy-Item -Force $versionFile (Join-Path $InstallDir 'VERSION.txt') }
+foreach($name in @('VERSION.txt','manifest.json')){
+  $src=Join-Path $scriptRoot $name
+  if(Test-Path $src){Copy-Item -Force $src (Join-Path $InstallDir $name)}
+}
 
 Write-Host ''
 Write-Host 'FMiniMug1 Beta installed successfully.' -ForegroundColor Green
-Write-Host "Launcher: $launcher"
+Write-Host "Install directory: $InstallDir"
+Write-Host 'Runtime dependency: Windows PowerShell only (no Node.js/Python required).' -ForegroundColor Green
 Write-Host 'No firmware was flashed to an FM-1 device.' -ForegroundColor Yellow
 Write-Host ''
 
 if (-not $NoLaunch) {
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher
+  Start-Process powershell.exe -ArgumentList '-NoProfile','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-File',"`"$launcher`""
 }
