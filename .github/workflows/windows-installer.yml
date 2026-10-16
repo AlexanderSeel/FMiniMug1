@@ -1,0 +1,109 @@
+name: Windows Beta Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/Install-FMiniMug1-Beta.ps1'
+      - 'scripts/Install-FMiniMug1-Beta.cmd'
+      - '.github/workflows/windows-installer.yml'
+      - '.github/workflows/publish-beta.yml'
+  pull_request:
+    paths:
+      - 'scripts/Install-FMiniMug1-Beta.ps1'
+      - 'scripts/Install-FMiniMug1-Beta.cmd'
+      - '.github/workflows/windows-installer.yml'
+      - '.github/workflows/publish-beta.yml'
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build synthetic beta package
+        shell: pwsh
+        run: |
+          $pkg = Join-Path $env:RUNNER_TEMP 'beta-package'
+          $app = Join-Path $pkg 'app'
+          $dsp = Join-Path $app 'dsp'
+          New-Item -ItemType Directory -Force $dsp | Out-Null
+          Copy-Item scripts/Install-FMiniMug1-Beta.ps1 $pkg
+          Copy-Item scripts/Install-FMiniMug1-Beta.cmd $pkg
+          Set-Content (Join-Path $pkg 'VERSION.txt') 'v0.0.0-ci'
+          Set-Content (Join-Path $app 'index.html') '<!doctype html><title>FMiniMug1 CI</title><h1>FMiniMug1 CI</h1>' -Encoding utf8
+          [IO.File]::WriteAllBytes((Join-Path $dsp 'fminimug1.wasm'), [byte[]](0,97,115,109,1,0,0,0))
+          Set-Content (Join-Path $dsp 'fminimug1-worklet.js') '/* CI worklet */' -Encoding utf8
+
+          $lines = Get-ChildItem $pkg -File -Recurse | Where-Object Name -ne 'SHA256SUMS' | Sort-Object FullName | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($pkg, $_.FullName).Replace('\','/')
+            $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+            "$hash  $relative"
+          }
+          Set-Content (Join-Path $pkg 'SHA256SUMS') $lines -Encoding ascii
+          "PKG=$pkg" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Install beta without shortcuts or launch
+        shell: pwsh
+        run: |
+          $install = Join-Path $env:RUNNER_TEMP 'FMiniMug1-installed'
+          & (Join-Path $env:PKG 'Install-FMiniMug1-Beta.ps1') `
+            -InstallDir $install `
+            -NoDesktopShortcut `
+            -NoStartMenuShortcut `
+            -NoLaunch
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Test-Path (Join-Path $install 'app/index.html') | Should -BeTrue
+          Test-Path (Join-Path $install 'app/dsp/fminimug1.wasm') | Should -BeTrue
+          Test-Path (Join-Path $install 'Start-FMiniMug1.ps1') | Should -BeTrue
+          Test-Path (Join-Path $install 'serve.mjs') | Should -BeTrue
+          Test-Path (Join-Path $install 'Uninstall-FMiniMug1.ps1') | Should -BeTrue
+          "INSTALL=$install" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Smoke-test installed localhost server
+        shell: pwsh
+        run: |
+          $port = 8877
+          $server = Join-Path $env:INSTALL 'serve.mjs'
+          $app = Join-Path $env:INSTALL 'app'
+          $proc = Start-Process node -ArgumentList @($server,$app,$port) -PassThru -WindowStyle Hidden
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            do {
+              Start-Sleep -Milliseconds 250
+              try { $response = Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing } catch { $response = $null }
+            } while (-not $response -and (Get-Date) -lt $deadline)
+            if (-not $response) { throw 'Installed local server did not become ready.' }
+            if ($response.StatusCode -ne 200) { throw "Unexpected index status $($response.StatusCode)" }
+            if ($response.Content -notmatch 'FMiniMug1 CI') { throw 'Installed index content mismatch.' }
+            if ($response.Headers['Cross-Origin-Opener-Policy'] -ne 'same-origin') { throw 'COOP header missing.' }
+            if ($response.Headers['Cross-Origin-Embedder-Policy'] -ne 'require-corp') { throw 'COEP header missing.' }
+
+            $wasm = Invoke-WebRequest "http://127.0.0.1:$port/dsp/fminimug1.wasm" -UseBasicParsing
+            if ($wasm.StatusCode -ne 200) { throw 'WASM asset not served.' }
+            if ($wasm.Headers['Content-Type'] -notmatch '^application/wasm') { throw "Wrong WASM MIME: $($wasm.Headers['Content-Type'])" }
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+
+      - name: Verify checksum tampering is rejected
+        shell: pwsh
+        run: |
+          Add-Content (Join-Path $env:PKG 'app/index.html') '<!-- tampered -->'
+          $badInstall = Join-Path $env:RUNNER_TEMP 'FMiniMug1-bad'
+          $failed = $false
+          try {
+            & (Join-Path $env:PKG 'Install-FMiniMug1-Beta.ps1') `
+              -InstallDir $badInstall `
+              -NoDesktopShortcut `
+              -NoStartMenuShortcut `
+              -NoLaunch
+          } catch {
+            $failed = $true
+            Write-Host "Expected verification failure: $($_.Exception.Message)"
+          }
+          if (-not $failed) { throw 'Tampered beta package was incorrectly accepted.' }
