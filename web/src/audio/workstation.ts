@@ -31,7 +31,10 @@ export class WorkstationEngine{
   private starting:Promise<void>|null=null;
   private listeners=new Set<(m:WorkstationMeter)=>void>();
 
-  onMeter(cb:(m:WorkstationMeter)=>void){this.listeners.add(cb);return()=>this.listeners.delete(cb)}
+  onMeter(cb:(m:WorkstationMeter)=>void){
+    this.listeners.add(cb);
+    return()=>{this.listeners.delete(cb)};
+  }
   async start(){if(this.starting)return this.starting;this.starting=this.startInternal();return this.starting}
   private async startInternal(){
     if(!this.ctx){
