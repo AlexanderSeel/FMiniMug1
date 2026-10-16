@@ -16,15 +16,15 @@ on:
       - '.github/workflows/windows-installer.yml'
       - '.github/workflows/publish-beta.yml'
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Build synthetic beta package
         shell: pwsh
@@ -35,7 +35,8 @@ jobs:
           New-Item -ItemType Directory -Force $dsp | Out-Null
           Copy-Item scripts/Install-FMiniMug1-Beta.ps1 $pkg
           Copy-Item scripts/Install-FMiniMug1-Beta.cmd $pkg
-          Set-Content (Join-Path $pkg 'VERSION.txt') 'v0.0.0-ci'
+          Set-Content (Join-Path $pkg 'VERSION.txt') 'v0.0.0-ci' -Encoding ascii
+          Set-Content (Join-Path $pkg 'manifest.json') '{"virtual_installer":true,"hardware_installable":false}' -Encoding utf8
           Set-Content (Join-Path $app 'index.html') '<!doctype html><title>FMiniMug1 CI</title><h1>FMiniMug1 CI</h1>' -Encoding utf8
           [IO.File]::WriteAllBytes((Join-Path $dsp 'fminimug1.wasm'), [byte[]](0,97,115,109,1,0,0,0))
           Set-Content (Join-Path $dsp 'fminimug1-worklet.js') '/* CI worklet */' -Encoding utf8
@@ -48,7 +49,7 @@ jobs:
           Set-Content (Join-Path $pkg 'SHA256SUMS') $lines -Encoding ascii
           "PKG=$pkg" | Out-File $env:GITHUB_ENV -Append
 
-      - name: Install beta without shortcuts or launch
+      - name: Install beta with Windows PowerShell only
         shell: pwsh
         run: |
           $install = Join-Path $env:RUNNER_TEMP 'FMiniMug1-installed'
@@ -57,50 +58,69 @@ jobs:
             -NoDesktopShortcut `
             -NoStartMenuShortcut `
             -NoLaunch
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
           foreach ($relative in @(
             'app/index.html',
             'app/dsp/fminimug1.wasm',
             'Start-FMiniMug1.ps1',
-            'serve.mjs',
-            'Uninstall-FMiniMug1.ps1'
+            'Stop-FMiniMug1.ps1',
+            'Uninstall-FMiniMug1.ps1',
+            'VERSION.txt',
+            'manifest.json'
           )) {
             $path = Join-Path $install $relative
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Installed file missing: $relative" }
           }
+          if (Test-Path (Join-Path $install 'serve.mjs')) { throw 'Legacy Node server was unexpectedly installed.' }
+          $null=[ScriptBlock]::Create((Get-Content -Raw (Join-Path $install 'Start-FMiniMug1.ps1')))
+          $null=[ScriptBlock]::Create((Get-Content -Raw (Join-Path $install 'Stop-FMiniMug1.ps1')))
+          $null=[ScriptBlock]::Create((Get-Content -Raw (Join-Path $install 'Uninstall-FMiniMug1.ps1')))
           "INSTALL=$install" | Out-File $env:GITHUB_ENV -Append
 
-      - name: Smoke-test installed localhost server
+      - name: Smoke-test built-in localhost server
         shell: pwsh
         run: |
-          $port = 8877
-          $server = Join-Path $env:INSTALL 'serve.mjs'
-          $app = Join-Path $env:INSTALL 'app'
-          $proc = Start-Process node -ArgumentList @("`"$server`"","`"$app`"",$port) -PassThru -WindowStyle Hidden
+          $port = 18765
+          $launcher = Join-Path $env:INSTALL 'Start-FMiniMug1.ps1'
+          $proc = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$launcher`"",'-NoBrowser','-Port',"$port"
           try {
+            $response = $null
             $deadline = (Get-Date).AddSeconds(15)
             do {
-              Start-Sleep -Milliseconds 250
-              try { $response = Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing } catch { $response = $null }
+              Start-Sleep -Milliseconds 200
+              try { $response = Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 2 } catch { $response = $null }
             } while (-not $response -and (Get-Date) -lt $deadline)
-            if (-not $response) { throw 'Installed local server did not become ready.' }
+            if (-not $response) { throw 'Installed PowerShell local server did not become ready.' }
             if ($response.StatusCode -ne 200) { throw "Unexpected index status $($response.StatusCode)" }
             if ($response.Content -notmatch 'FMiniMug1 CI') { throw 'Installed index content mismatch.' }
             if ([string]$response.Headers['Cross-Origin-Opener-Policy'] -ne 'same-origin') { throw 'COOP header missing.' }
             if ([string]$response.Headers['Cross-Origin-Embedder-Policy'] -ne 'require-corp') { throw 'COEP header missing.' }
 
-            $wasm = Invoke-WebRequest "http://127.0.0.1:$port/dsp/fminimug1.wasm" -UseBasicParsing
+            $wasm = Invoke-WebRequest "http://127.0.0.1:$port/dsp/fminimug1.wasm" -UseBasicParsing -TimeoutSec 2
             if ($wasm.StatusCode -ne 200) { throw 'WASM asset not served.' }
             if ([string]$wasm.Headers['Content-Type'] -notmatch '^application/wasm') { throw "Wrong WASM MIME: $($wasm.Headers['Content-Type'])" }
           } finally {
-            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+            & (Join-Path $env:INSTALL 'Stop-FMiniMug1.ps1')
+            Start-Sleep -Milliseconds 300
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
           }
+
+      - name: Verify clean upgrade over existing install
+        shell: pwsh
+        run: |
+          Set-Content -Path (Join-Path $env:INSTALL 'app\old-file.txt') -Value 'must disappear'
+          & (Join-Path $env:PKG 'Install-FMiniMug1-Beta.ps1') `
+            -InstallDir $env:INSTALL `
+            -NoDesktopShortcut `
+            -NoStartMenuShortcut `
+            -NoLaunch
+          if (Test-Path (Join-Path $env:INSTALL 'app\old-file.txt')) { throw 'Upgrade did not replace the old app directory.' }
+          if (-not (Test-Path (Join-Path $env:INSTALL 'app\index.html'))) { throw 'Upgraded app is incomplete.' }
 
       - name: Verify checksum tampering is rejected
         shell: pwsh
         run: |
-          Add-Content (Join-Path $env:PKG 'app/index.html') '<!-- tampered -->'
+          Add-Content (Join-Path $env:PKG 'app\index.html') '<!-- tampered -->'
           $badInstall = Join-Path $env:RUNNER_TEMP 'FMiniMug1-bad'
           $failed = $false
           try {
@@ -114,3 +134,10 @@ jobs:
             Write-Host "Expected verification failure: $($_.Exception.Message)"
           }
           if (-not $failed) { throw 'Tampered beta package was incorrectly accepted.' }
+
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          & (Join-Path $env:INSTALL 'Uninstall-FMiniMug1.ps1')
+          for ($i=0; $i -lt 40 -and (Test-Path $env:INSTALL); $i++) { Start-Sleep -Milliseconds 100 }
+          if (Test-Path $env:INSTALL) { throw 'Uninstaller did not remove the install directory.' }
