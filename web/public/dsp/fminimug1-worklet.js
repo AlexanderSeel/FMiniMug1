@@ -5,6 +5,7 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
     this.exports = null;
     this.memory = null;
     this.meterCounter = 0;
+    this.mode = options.processorOptions?.mode === 'bass808' ? 'bass808' : 'mini';
 
     try {
       const bytes = options.processorOptions?.wasmBytes;
@@ -17,9 +18,14 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       const instance = new WebAssembly.Instance(module, imports);
       this.exports = instance.exports;
       this.memory = this.exports.memory;
-      this.exports.fmm_init(sampleRate);
+      if (this.mode === 'bass808') {
+        if (!this.exports.fmb808_wasm_init) throw new Error('WASM lacks 808 BASS exports');
+        this.exports.fmb808_wasm_init(sampleRate);
+      } else {
+        this.exports.fmm_init(sampleRate);
+      }
       this.ready = true;
-      this.port.postMessage({type: 'ready'});
+      this.port.postMessage({type: 'ready', mode: this.mode});
     } catch (error) {
       this.port.postMessage({type: 'error', message: String(error)});
     }
@@ -27,6 +33,17 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
     this.port.onmessage = event => {
       if (!this.ready) return;
       const m = event.data;
+      if (this.mode === 'bass808') {
+        if (m.type === 'param') this.exports.fmb808_wasm_set_param(m.id, m.value);
+        else if (m.type === 'params') {
+          for (const [id, value] of m.values) this.exports.fmb808_wasm_set_param(id, value);
+        } else if (m.type === 'noteOn') {
+          this.exports.fmb808_wasm_note_on(m.note, m.accent ? 1 : 0, m.slide ? 1 : 0);
+        } else if (m.type === 'noteOff') this.exports.fmb808_wasm_note_off();
+        else if (m.type === 'reset') this.exports.fmb808_wasm_reset();
+        return;
+      }
+
       if (m.type === 'param') this.exports.fmm_set_param(m.id, m.value);
       else if (m.type === 'params') {
         for (const [id, value] of m.values) this.exports.fmm_set_param(id, value);
@@ -61,7 +78,8 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       return true;
     }
 
-    const ptr = this.exports.fmm_render(frames);
+    const ptr = this.mode === 'bass808' ?
+      this.exports.fmb808_wasm_render(frames) : this.exports.fmm_render(frames);
     const mono = new Float32Array(this.memory.buffer, ptr, frames);
     let peak = 0;
     let sum = 0;
@@ -77,9 +95,10 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       this.meterCounter = 0;
       this.port.postMessage({
         type: 'meter',
+        mode: this.mode,
         peak,
         rms: Math.sqrt(sum / frames),
-        step: this.exports.fmm_seq_step ? this.exports.fmm_seq_step() : 0
+        step: this.mode === 'mini' && this.exports.fmm_seq_step ? this.exports.fmm_seq_step() : 0
       });
     }
     return true;
