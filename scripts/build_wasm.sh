@@ -20,10 +20,12 @@ emcc \
   firmware/src/fm_drum808.c \
   firmware/src/fm_alpha.c \
   firmware/src/fm_seq.c \
+  firmware/src/fm_workstation_seq.c \
   firmware/wasm/fm_voice_wasm.c \
   firmware/wasm/fm_bass808_wasm.c \
   firmware/wasm/fm_drum808_wasm.c \
   firmware/wasm/fm_alpha_wasm.c \
+  firmware/wasm/fm_workstation_wasm.c \
   -s STANDALONE_WASM=1 \
   -s FILESYSTEM=0 \
   -s MALLOC=emmalloc \
@@ -63,6 +65,26 @@ emcc \
   -Wl,--export=fma_wasm_note_off \
   -Wl,--export=fma_wasm_all_notes_off \
   -Wl,--export=fma_wasm_render \
+  -Wl,--export=fmw_wasm_init \
+  -Wl,--export=fmw_wasm_reset \
+  -Wl,--export=fmw_wasm_set_level \
+  -Wl,--export=fmw_wasm_mini_param \
+  -Wl,--export=fmw_wasm_mini_note_on \
+  -Wl,--export=fmw_wasm_mini_note_off \
+  -Wl,--export=fmw_wasm_bass_param \
+  -Wl,--export=fmw_wasm_drum_voice_param \
+  -Wl,--export=fmw_wasm_drum_global_param \
+  -Wl,--export=fmw_wasm_drum_trigger \
+  -Wl,--export=fmw_wasm_alpha_param \
+  -Wl,--export=fmw_wasm_alpha_note_on \
+  -Wl,--export=fmw_wasm_alpha_note_off \
+  -Wl,--export=fmw_wasm_seq_meta \
+  -Wl,--export=fmw_wasm_seq_bass_step \
+  -Wl,--export=fmw_wasm_seq_drum_step \
+  -Wl,--export=fmw_wasm_seq_start \
+  -Wl,--export=fmw_wasm_seq_stop \
+  -Wl,--export=fmw_wasm_seq_step \
+  -Wl,--export=fmw_wasm_render \
   -o "$OUT/fminimug1.wasm"
 
-echo "built $OUT/fminimug1.wasm with MINI + 808 BASS + 808 DRUM + ALPHA native engines"
+echo "built $OUT/fminimug1.wasm with unified MINI + 808 BASS + 808 DRUM + ALPHA workstation renderer"
