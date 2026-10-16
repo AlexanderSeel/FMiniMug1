@@ -45,8 +45,10 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
         else if (m.type === 'alphaNoteOn') this.exports.fmw_wasm_alpha_note_on(m.note,m.velocity??110);
         else if (m.type === 'alphaNoteOff') this.exports.fmw_wasm_alpha_note_off(m.note);
         else if (m.type === 'seqMeta') this.exports.fmw_wasm_seq_meta(m.length,m.bpm,m.swing??0);
+        else if (m.type === 'seqMiniStep') this.exports.fmw_wasm_seq_mini_step(m.index,m.note,m.velocity??100,m.gate??90);
         else if (m.type === 'seqBassStep') this.exports.fmw_wasm_seq_bass_step(m.index,m.note,m.flags??0,m.velocity??108,m.gate??72);
         else if (m.type === 'seqDrumStep') this.exports.fmw_wasm_seq_drum_step(m.index,m.hits??0,m.accents??0);
+        else if (m.type === 'seqAlphaStep') this.exports.fmw_wasm_seq_alpha_step(m.index,m.notes?.[0]??-1,m.notes?.[1]??-1,m.notes?.[2]??-1,m.notes?.[3]??-1,m.velocity??92,m.gate??90);
         else if (m.type === 'seqStart') this.exports.fmw_wasm_seq_start();
         else if (m.type === 'seqStop') this.exports.fmw_wasm_seq_stop();
         else if (m.type === 'reset') this.exports.fmw_wasm_reset();
