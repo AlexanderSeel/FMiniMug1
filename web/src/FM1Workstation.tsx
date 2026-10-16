@@ -69,9 +69,9 @@ export function FM1Workstation(){
   const [fine,setFine]=useState(false);
   const [audioState,setAudioState]=useState<'idle'|'ready'|'error'>('idle');
   const [message,setMessage]=useState('');
-  const [miniValues,setMiniValues]=useState(()=>initialValues(MINI));
-  const [bassValues,setBassValues]=useState(()=>({...initialValues(BASS),...WORKSTATION_SCENES[0].bassPatch.values}));
-  const [alphaValues,setAlphaValues]=useState(()=>({...initialValues(ALPHA),...WORKSTATION_SCENES[0].alphaPatch.values}));
+  const [miniValues,setMiniValues]=useState<Record<number,number>>(()=>initialValues(MINI));
+  const [bassValues,setBassValues]=useState<Record<number,number>>(()=>({...initialValues(BASS),...WORKSTATION_SCENES[0].bassPatch.values}));
+  const [alphaValues,setAlphaValues]=useState<Record<number,number>>(()=>({...initialValues(ALPHA),...WORKSTATION_SCENES[0].alphaPatch.values}));
   const [drumVoice,setDrumVoice]=useState(0);
   const [drumKit,setDrumKit]=useState<DrumVoiceState[]>(initialDrumKit);
   const [drumAccent,setDrumAccent]=useState(.7);
@@ -87,7 +87,7 @@ export function FM1Workstation(){
   const page=part.pages[pageIndex[partId]??0]??part.pages[0];
   const scene=WORKSTATION_SCENES[sceneIndex];
   const bindingPage=partId==='mini'?MINI[page.id]:partId==='bass808'?BASS[page.id]:partId==='alpha'?ALPHA[page.id]:undefined;
-  const bindingValues=partId==='mini'?miniValues:partId==='bass808'?bassValues:alphaValues;
+  const bindingValues:Record<number,number>=partId==='mini'?miniValues:partId==='bass808'?bassValues:alphaValues;
   const visiblePage=globalPage===null?page:WORKSTATION_GLOBAL_PAGES[globalPage];
   const currentDrum=drumKit[drumVoice];
   const bassStep=bassPattern.steps[seqCursor%bassPattern.steps.length];
