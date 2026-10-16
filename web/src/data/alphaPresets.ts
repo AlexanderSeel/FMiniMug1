@@ -13,4 +13,59 @@ export const ALPHA_PRESETS:AlphaPatch[]=[
   make('Alpha Init',[.72,.28,.34,.02,1800,.22,2100,.35,.72,0,.32,0,.018,.42,.68,.48,.38,.25,.06,120,1,.28,.46,.34])
 ];
 
-export const ALPHA_DEFAULT=ALPHA_PRESETS[ALPHA_PRESETS.length-1];
+// Factory tone names documented for the Alpha Juno-1/2 preset (P) and memory (M)
+// banks. The current DSP is an original compact recreation, so these are modeled
+// compatibility patches rather than byte-for-byte SysEx reproductions. The bank is
+// intentionally complete now so the Alpha Dial workflow can browse the familiar 8x8 layout.
+const FACTORY_P=[
+  'PolySynth1','JazzGuitar','Xylophone','Low String','LeadSynth1','ChorusGuit','SynthBass1','ElectroDrm',
+  'HighString','TeknoStrng','StringOrgn','FastString','LongString','Cello','SoloViolin','Pizzicato',
+  'Piano 1','E Piano 1','E Piano 2','Piano 2','E Piano 3','Clav','Harpsichrd','PianoPad',
+  'Organ 1','Organ 2','CheesyOrgn','PipeOrgan1','PipeOrgan2','VoicePad','sinusoidal','Voices 1',
+  'Brass 1','Syn Rise','Spit Valve','Fat Synth','Arpeggiatr','Velo-Reso1','Big Brass','Pad 1',
+  'LeadSynth2','LeadSynth3','Flute','LeadSynth4','Sax','E Bass 1','SynthBass2','SequencrBs',
+  'Bells 1','BellChime1','BellChime2','Syn-Bello','Marimba','Syn Koto','StlDrumBnd','Harp',
+  'Tron Blast','NoiseShots','TwiliteZne','Scratchin','Syn Echo','PolePositn','--U-F-O--','Timps'
+] as const;
+
+const FACTORY_M=[
+  'Brass 2','Brass 3','BrassHorns','FatBrass 1','Trumpets','BrassSwell','PolySynth2','PolySynth3',
+  'BowdStrngs','RichStrngs','Orchestra','SynOrchsta','StrngSweep','SoloVioln2','DblBasses','Ominous',
+  'Piano 3','E Piano 4','Loud-Piano','Piano-FX','Clavichord','Harpsi 2','AccGuitar','BassPiano',
+  'Organ 3','Organ 4','ChowaOrgan','PipeOrgan3','Accordion','Vocorder','Voices 2','Harmonica',
+  'SynthSweep','Poly Pulse','CosmoSweep','ChrusPluck','Bells 2','Vibe','Koto','BellChime3',
+  'Lead 5','Lead 6','Inv-Solo','Clarinet','Oboe','SynthBass3','SynthBass4','UpriteBass',
+  'Machines','EchoXplosn','ooops','Jet Chord','Take-Off','Whistle','Surprise','Oct Jump',
+  'Jet','Helicopter','DogsBark','WET','ooohSCARY','What the','SynthToms','Kick'
+] as const;
+
+function classify(name:string){
+  const n=name.toLowerCase();
+  if(n.includes('string')||n.includes('orch')||n.includes('pad')||n.includes('voice'))return 0;
+  if(n.includes('brass')||n.includes('trump')||n.includes('horn'))return 1;
+  if(n.includes('bass'))return 4;
+  if(n.includes('lead')||n.includes('flute')||n.includes('sax')||n.includes('oboe')||n.includes('clar'))return 2;
+  if(n.includes('piano')||n.includes('clav')||n.includes('harpsi')||n.includes('guitar')||n.includes('organ'))return 2;
+  if(n.includes('bell')||n.includes('xylo')||n.includes('marimba')||n.includes('koto')||n.includes('harp'))return 4;
+  if(n.includes('noise')||n.includes('jet')||n.includes('u-f-o')||n.includes('helicopter')||n.includes('scratch')||n.includes('echo'))return 6;
+  return 7;
+}
+
+function modeledFactoryPatch(name:string,index:number,bank:'P'|'M'):AlphaPatch{
+  const seed=ALPHA_PRESETS[classify(name)];
+  const values={...seed.values} as Record<AlphaParamId,number>;
+  const drift=((index%8)-3.5)/100;
+  values[ALPHA_PARAM.cutoff]=Math.max(120,Math.min(9000,(values[ALPHA_PARAM.cutoff]??1800)*(1+drift*2.4)));
+  values[ALPHA_PARAM.resonance]=Math.max(0,Math.min(.92,(values[ALPHA_PARAM.resonance]??.2)+drift));
+  values[ALPHA_PARAM.chorusMix]=Math.max(0,Math.min(.8,(values[ALPHA_PARAM.chorusMix]??.3)+(index%3)*.025));
+  values[ALPHA_PARAM.lfoRate]=Math.max(.05,Math.min(8,(values[ALPHA_PARAM.lfoRate]??.4)+(index%5)*.035));
+  return {name:`${bank}-${Math.floor(index/8)+1}${(index%8)+1} ${name}`,values};
+}
+
+export const ALPHA_FACTORY_PRESETS:AlphaPatch[]=[
+  ...FACTORY_P.map((name,index)=>modeledFactoryPatch(name,index,'P')),
+  ...FACTORY_M.map((name,index)=>modeledFactoryPatch(name,index,'M'))
+];
+
+export const ALPHA_ALL_PRESETS=[...ALPHA_FACTORY_PRESETS,...ALPHA_PRESETS];
+export const ALPHA_DEFAULT=ALPHA_FACTORY_PRESETS[0]??ALPHA_PRESETS[ALPHA_PRESETS.length-1];
