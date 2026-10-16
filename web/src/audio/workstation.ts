@@ -16,6 +16,7 @@ async function loadWasmBytes(url:string){
 export type WorkstationMeter={peak:number;rms:number;step:number};
 export type WorkstationMiniStep={note:number;velocity:number;gate:number};
 export type WorkstationAlphaStep={notes:[number,number,number,number];velocity:number;gate:number};
+export type WorkstationFxParam=0|1|2;
 export type WorkstationScene={
   name:string;
   bpm:number;
@@ -79,6 +80,7 @@ export class WorkstationEngine{
   private send(message:unknown){this.node?.port.postMessage(message)}
   setMaster(value:number){if(this.master)this.master.gain.value=Math.max(0,Math.min(1.2,value))}
   setPartLevel(part:0|1|2|3,value:number){this.send({type:'level',part,value})}
+  setFxParam(param:WorkstationFxParam,value:number){this.send({type:'fxParam',param,value})}
   setMiniParam(id:number,value:number){this.send({type:'miniParam',id,value})}
   miniNoteOn(note:number,velocity=110){this.send({type:'miniNoteOn',note,velocity})}
   miniNoteOff(note:number){this.send({type:'miniNoteOff',note})}
