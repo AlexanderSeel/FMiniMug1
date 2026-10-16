@@ -6,6 +6,21 @@ typedef enum {
   FMB808_SQUARE = 1
 } fmb808_wave_t;
 
+typedef enum {
+  FMB808_PARAM_WAVE = 0,
+  FMB808_PARAM_TUNE,
+  FMB808_PARAM_SUB,
+  FMB808_PARAM_DRIVE,
+  FMB808_PARAM_CUTOFF,
+  FMB808_PARAM_RESONANCE,
+  FMB808_PARAM_ENV_MOD,
+  FMB808_PARAM_DECAY,
+  FMB808_PARAM_SLIDE,
+  FMB808_PARAM_ACCENT,
+  FMB808_PARAM_ACCENT_DECAY,
+  FMB808_PARAM_COUNT
+} fmb808_param_id_t;
+
 typedef struct {
   uint8_t wave;
   float tune_semitones;
