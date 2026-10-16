@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "fm_workstation_seq.h"
-#include "fm_workstation_ui.h"
+#include "fm_workstation_state.h"
 
 #define FMW_RUNTIME_PART_COUNT 4u
 #define FMW_RUNTIME_FX_COUNT 3u
