@@ -21,14 +21,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
       - name: Resolve one-shot beta request
         id: beta
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
+
+          # A slower older target run must never consume a beta tag after main has moved.
+          git fetch origin main --quiet
+          MAIN_SHA=$(git rev-parse origin/main)
+          if [ "$VERIFIED_SHA" != "$MAIN_SHA" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping stale verified run $VERIFIED_SHA; current main is $MAIN_SHA."
+            exit 0
+          fi
+
           if [ ! -s .release-beta ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "No .release-beta marker on verified commit."
@@ -167,7 +179,6 @@ jobs:
           test -s release/out/manifest.json
           (cd release/out && sha256sum -c SHA256SUMS)
 
-          # Smoke-check package layout before publishing.
           unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/Install-FMiniMug1-Beta.ps1"
           unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/Install-FMiniMug1-Beta.cmd"
           unzip -Z1 "$WINDOWS_ZIP" | grep -Fx "FMiniMug1-${TAG}/app/index.html"
@@ -180,7 +191,6 @@ jobs:
           unzip -Z1 "$HARDWARE_ZIP" | grep -Fx "HARDWARE-BETA-WARNING.txt"
           unzip -Z1 "$HARDWARE_ZIP" | grep -Fx "fminimug1-workstation-stress.bin"
 
-          # Parse the Windows installer before shipping it.
           pwsh -NoProfile -Command '$null=[ScriptBlock]::Create((Get-Content -Raw "scripts/Install-FMiniMug1-Beta.ps1")); Write-Host "PowerShell installer syntax OK"'
 
           python3 - <<'PY'
@@ -201,7 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           cat > release-notes.md <<EOF
-          ## FMiniMug1 $TAG — first workstation beta
+          ## FMiniMug1 $TAG — workstation beta
 
           Built from commit \`$HEAD_SHA\` after the exact commit passed the real JieLi target diagnostic workflow and its safety gates.
 
@@ -212,14 +222,14 @@ jobs:
           - calmer default demo scenes
           - ALPHA Dial workflow with PARAM/VALUE focus and Tone Modify macros
           - native delay / ambience / master drive
-          - Windows one-call installer package
+          - checksum-verifying Windows one-call installer package
 
           ### Windows install
           Download \`FMiniMug1-${TAG}-windows-beta.zip\`, extract it and double-click:
 
           \`Install-FMiniMug1-Beta.cmd\`
 
-          The installer copies the prebuilt app to LocalAppData, creates shortcuts and runs it on localhost. It does not require Emscripten or a source checkout.
+          The installer verifies its packaged files, copies the prebuilt app to LocalAppData, creates shortcuts and runs it on localhost. It does not require Emscripten or a source checkout.
 
           ### Hardware diagnostics
           \`FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip\` contains the verified target diagnostics from the same commit.
