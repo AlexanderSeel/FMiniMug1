@@ -54,6 +54,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Remove fake parameter labels that had no matching engine implementation.
 - [x] Global MIXER / SCENE / CLOCK pages have working virtual state; unsupported FX controls show N/A.
 - [x] SAVE stores a local virtual snapshot; SCENE page exposes explicit SAVE/LOAD encoder-press actions.
+- [x] MINI / DRUM / BASS / ALPHA SEQ pages now map to real sample-clock lane state.
 - [ ] Compile the actual native 240×240 renderer to WASM/canvas for pixel-identical preview.
 - [ ] Move remaining browser-only global state into shared/native C state.
 
@@ -105,10 +106,10 @@ Source of truth: `shared/workstation.json`.
 - [x] Six-key polyphonic virtual hardware test through the unified workstation instance.
 - [x] 8 original initial presets.
 - [x] Real JieLi full-load image can link with six ALPHA voices + chorus and the other V2 engines.
-- [x] Virtual chord selection/performance controls exist for scene testing.
-- [ ] Native sample-clock ALPHA chord lane; current chord performance remains browser-controlled.
+- [x] Native-clock four-note ALPHA chord lane with editable STEP / CHORD / GATE / PLAY.
+- [x] ALPHA transport no longer depends on browser-held chord notes.
 - [ ] PWM.
-- [ ] Sustain pedal / chord memory.
+- [ ] Sustain pedal / richer chord memory.
 - [ ] Stereo/pan implementation after workstation mixer becomes stereo.
 - [ ] 32+ original factory presets.
 - [ ] Real-device CPU measurement with six voices + chorus.
@@ -117,15 +118,16 @@ Source of truth: `shared/workstation.json`.
 
 - [x] Portable native workstation sample-clock core with pair-preserving global swing and regression tests.
 - [x] Unified WASM workstation renderer owns one sample-clock instance.
+- [x] Native-clock MINI note/velocity/gate lane in unified WASM.
 - [x] Native-clock drum lane bitmask triggering in unified WASM.
 - [x] Native-clock bass note/accent/slide/gate lane in unified WASM.
+- [x] Native-clock ALPHA four-note chord/velocity/gate lane in unified WASM.
 - [x] Browser exposes native current-step metering from the render loop.
-- [x] Public unified-WASM setters for sequence metadata, bass steps and drum steps.
-- [x] Virtual FM-1 edits BASS and DRUM step data directly in native runtime while transport runs.
-- [x] 16-step display strip shows active steps, edit cursor and native playhead.
+- [x] Public unified-WASM setters for metadata and all four part lanes.
+- [x] Virtual FM-1 edits all four lane types directly in native runtime while transport runs.
+- [x] 16-step display strip shows active steps, edit cursor and native playhead for all sequenced parts.
+- [x] MINI and ALPHA can use gates longer than one step for held quarter-note/chord material without JS timers.
 - [ ] Migrate the FM-1 hardware runtime from legacy `fm_seq`/Studio transport to the V2 workstation clock.
-- [ ] MINI sequence lane in unified workstation transport.
-- [ ] ALPHA poly/chord lane.
 - [ ] Independent pattern length per part while remaining phase coherent.
 - [ ] Probability / microtiming / parameter locks / motion lanes.
 - [ ] Pattern chains / song arrangement.
@@ -138,9 +140,8 @@ Source of truth: `shared/workstation.json`.
 - [x] First 5 V2 demo scenes defined as regression material.
 - [x] Scene selection can be changed from FM-1-style controls and reloaded during transport.
 - [x] Shared BPM/swing controls update native sequence metadata.
-- [x] Virtual local snapshot SAVE/LOAD is available for iterative testing.
-- [ ] MINI patch/pattern loading inside V2 scenes instead of descriptive target only.
-- [ ] ALPHA chord/pattern playback inside native scene transport.
+- [x] Scene changes seed MINI and ALPHA lane material as well as BASS/DRUM patterns.
+- [x] Virtual local snapshot SAVE/LOAD includes all four sequencer lanes.
 - [ ] Four-part hardware mixer runtime.
 - [ ] Global delay.
 - [ ] Resource-bounded reverb/ambience.
@@ -155,12 +156,13 @@ Source of truth: `shared/workstation.json`.
 - [x] Native C DSP for MINI, 808 DRUM, 808 BASS and ALPHA compiled into one WASM binary.
 - [x] Unified `workstation` AudioWorklet mode for four-part mixing and native sample-clock testing.
 - [x] Same part/page descriptor contract as hardware.
-- [x] Virtual FM-1 is the only main browser surface; old Minimoog editor is not rendered.
+- [x] Virtual FM-1 is the only main browser surface; obsolete parallel FM-1 component removed.
 - [x] Pointer/touch and PC keyboard play the currently selected part.
 - [x] Encoders are controlled directly through React state, not DOM click bridges.
 - [x] Audio failures are surfaced in UI with retry instead of failing silently.
 - [x] Controls with no real engine implementation are disabled and display N/A.
-- [x] Direct live DRUM/BASS native sequence editing is available on the FM-1 display/pages.
+- [x] Direct live native sequence editing is available for MINI / DRUM / BASS / ALPHA.
+- [x] Web/WASM production build verifies the four-lane exports and AudioWorklet bundle.
 - [ ] Pixel-identical native 240×240 UI rendered to WASM/canvas.
 - [ ] Deterministic WAV capture / regression render.
 - [ ] Browser interaction tests for key-down/up, encoder turn/press, page navigation and transport.
@@ -168,10 +170,11 @@ Source of truth: `shared/workstation.json`.
 ### Editor
 
 - [x] Part strip and hardware-oriented virtual shell.
-- [x] Basic drum grid and bass sequence editing.
+- [x] Compact native step editing for all four parts.
 - [ ] Descriptor-driven expanded editor panels around the hardware simulator.
 - [ ] Large drum sequencer editor.
 - [ ] Full bassline editor.
+- [ ] Full MINI melodic lane editor.
 - [ ] Alpha poly/chord editor.
 - [ ] Mixer / FX / Scene editor.
 - [ ] Hardware live sync via SysEx/USB-MIDI.
@@ -186,6 +189,7 @@ Source of truth: `shared/workstation.json`.
 - [x] 4 initial 808 BASS accent/slide patterns.
 - [x] 8 initial ALPHA presets.
 - [x] 5 initial full V2 scene definitions.
+- [x] Scene-derived starter MINI and ALPHA lane material for the current five V2 scenes.
 - [ ] 8+ drum kits / 24+ drum patterns.
 - [ ] 24+ bass patterns.
 - [ ] 32+ ALPHA presets.
@@ -205,6 +209,7 @@ Source of truth: `shared/workstation.json`.
 - [ ] Run `fminimug1-workstation-stress.bin` on real hardware and record LAST / MAX / OVER.
 - [ ] Define quality degradation policy if `OVER` is nonzero, never random underruns.
 - [ ] Build mapped four-part hardware runtime after control IDs and CPU budget are verified.
+- [ ] Port the four-lane workstation transport from the WASM integration layer into the mapped FM-1 runtime.
 - [ ] Read-only identity validation.
 - [ ] Validate stock V15 return/recovery path.
 - [ ] Only then create a mapped hardware beta.
@@ -228,10 +233,10 @@ fminimug1-synth-check.bin          # synthetic controls, do not use as mapped fi
 
 ## Immediate implementation order
 
-1. Finish the direct FM-1 virtual interaction audit and add browser interaction regression tests.
-2. Add native ALPHA chord lane and MINI lane to the shared transport.
-3. Move global mixer/scene state into native C and replace remaining browser-only state.
-4. Implement resource-bounded global delay/ambience, keeping unsupported FX controls marked N/A until real.
+1. Implement resource-bounded global delay / ambience / master character and make the FX page real instead of N/A.
+2. Move mixer/scene/transport lane state into a portable native workstation runtime shared by WASM and the future hardware runtime.
+3. Add browser interaction regression tests for key-down/up, encoder turn/press, page navigation and transport.
+4. Add independent per-part pattern length/paging and then probability/motion data.
 5. Compile the native 240×240 renderer to WASM/canvas.
 6. Verify physical FM-1 control IDs and run the V2 workstation stress image.
 7. Tune quality/polyphony from measured FM-1 MAX/OVER, then build the first mapped hardware beta.
