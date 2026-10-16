@@ -94,6 +94,8 @@ const args=[
   'firmware/src/fm_drum808.c',
   'firmware/src/fm_alpha.c',
   'firmware/src/fm_seq.c',
+  'firmware/src/fm_workstation_state.c',
+  'firmware/src/fm_workstation_runtime.c',
   'firmware/src/fm_workstation_seq.c',
   'firmware/src/fm_workstation_fx.c',
   'firmware/wasm/fm_voice_wasm.c',
