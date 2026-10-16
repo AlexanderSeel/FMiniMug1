@@ -36,6 +36,8 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
         else if (m.type === 'miniNoteOn') this.exports.fmw_wasm_mini_note_on(m.note,m.velocity??110);
         else if (m.type === 'miniNoteOff') this.exports.fmw_wasm_mini_note_off(m.note);
         else if (m.type === 'bassParam') this.exports.fmw_wasm_bass_param(m.id,m.value);
+        else if (m.type === 'bassNoteOn') this.exports.fmw_wasm_bass_note_on(m.note,m.accent?1:0,m.slide?1:0);
+        else if (m.type === 'bassNoteOff') this.exports.fmw_wasm_bass_note_off();
         else if (m.type === 'drumVoiceParam') this.exports.fmw_wasm_drum_voice_param(m.voice,m.param,m.value);
         else if (m.type === 'drumGlobalParam') this.exports.fmw_wasm_drum_global_param(m.param,m.value);
         else if (m.type === 'drumTrigger') this.exports.fmw_wasm_drum_trigger(m.voice,m.velocity??110,m.accent?1:0);
