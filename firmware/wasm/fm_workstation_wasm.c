@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <string.h>
 
-/* Reuse the existing MINI wrapper inside the same WASM instance. */
 void fmm_init(float sample_rate);
 void fmm_reset(void);
 void fmm_set_param(int id, float value);
@@ -80,7 +79,7 @@ static void step_event(uint8_t step, void *user) {
   const uint8_t slide = (bass_step->flags & FMW_BASS_SLIDE) ? 1u : 0u;
   fmb808_note_on(&bass, (uint8_t)bass_step->note, accent, slide);
   if (next->flags & FMW_BASS_SLIDE) {
-    bass_gate_left = 0u; /* Hold through into the target slide step. */
+    bass_gate_left = 0u;
   } else {
     const uint32_t duration = clock_state.step_samples ? clock_state.step_samples : 1u;
     bass_gate_left = (duration * (uint32_t)(bass_step->gate ? bass_step->gate : 1u)) / 100u;
@@ -149,6 +148,22 @@ void fmw_wasm_bass_param(int id, float value) {
 }
 
 __attribute__((visibility("default")))
+void fmw_wasm_bass_note_on(int note, int accent, int slide) {
+  ensure_init();
+  if (note < 0) note = 0;
+  if (note > 127) note = 127;
+  bass_gate_left = 0u;
+  fmb808_note_on(&bass, (uint8_t)note, accent ? 1u : 0u, slide ? 1u : 0u);
+}
+
+__attribute__((visibility("default")))
+void fmw_wasm_bass_note_off(void) {
+  ensure_init();
+  bass_gate_left = 0u;
+  fmb808_note_off(&bass);
+}
+
+__attribute__((visibility("default")))
 void fmw_wasm_drum_voice_param(int voice, int param, float value) {
   ensure_init();
   if (voice < 0 || voice >= FMD808_VOICE_COUNT) return;
@@ -208,15 +223,18 @@ void fmw_wasm_alpha_param(int id, float value) {
 __attribute__((visibility("default")))
 void fmw_wasm_alpha_note_on(int note, int velocity) {
   ensure_init();
-  if (note < 0) note = 0; if (note > 127) note = 127;
-  if (velocity < 1) velocity = 1; if (velocity > 127) velocity = 127;
+  if (note < 0) note = 0;
+  if (note > 127) note = 127;
+  if (velocity < 1) velocity = 1;
+  if (velocity > 127) velocity = 127;
   fma_note_on(&alpha, (uint8_t)note, (uint8_t)velocity);
 }
 
 __attribute__((visibility("default")))
 void fmw_wasm_alpha_note_off(int note) {
   ensure_init();
-  if (note < 0) note = 0; if (note > 127) note = 127;
+  if (note < 0) note = 0;
+  if (note > 127) note = 127;
   fma_note_off(&alpha, (uint8_t)note);
 }
 
@@ -234,9 +252,12 @@ __attribute__((visibility("default")))
 void fmw_wasm_seq_bass_step(int index, int note, int flags, int velocity, int gate) {
   ensure_init();
   if (index < 0 || index >= FMW_PATTERN_STEPS) return;
-  if (note < -1) note = -1; if (note > 127) note = 127;
-  if (velocity < 1) velocity = 1; if (velocity > 127) velocity = 127;
-  if (gate < 1) gate = 1; if (gate > 100) gate = 100;
+  if (note < -1) note = -1;
+  if (note > 127) note = 127;
+  if (velocity < 1) velocity = 1;
+  if (velocity > 127) velocity = 127;
+  if (gate < 1) gate = 1;
+  if (gate > 100) gate = 100;
   bass_steps[index].note = (int8_t)note;
   bass_steps[index].flags = (uint8_t)flags;
   bass_steps[index].velocity = (uint8_t)velocity;
