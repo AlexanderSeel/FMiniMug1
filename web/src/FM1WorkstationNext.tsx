@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 13005)
-Total output lines: 344
-
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type PointerEvent as ReactPointerEvent} from 'react';
 import {WORKSTATION_GLOBAL_PAGES,WORKSTATION_PARTS,type WorkstationPartId} from './generated/workstation';
 import {workstation,WORKSTATION_RUNTIME_FIELD,type WorkstationMiniStep,type WorkstationScene} from './audio/workstation';
@@ -216,7 +213,22 @@ export function FM1WorkstationNext(){
   },[alphaValues,ambienceMix,bassValues,delayMix,drumAccent,drumDrive,drumKit,drumMuted,master,masterDrive,miniValues,partLevels,pushSequence]);
 
   const setAlphaParams=(patch:Record<number,number>)=>{setAlphaValues(v=>({...v,...patch}));for(const [id,value] of Object.entries(patch))workstation.setAlphaParam(+id as AlphaParamId,value)};
-  const changeAlphaValue=(delta:number)=>{const current=alphaValues[alphaDial.id]??alphaDial.initial;let …1005 tokens truncated…ce(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
+  const changeAlphaValue=(delta:number)=>{const current=alphaValues[alphaDial.id]??alphaDial.initial;let value=clamp(current+delta*alphaDial.step*(fine?.25:1),alphaDial.min,alphaDial.max);if(alphaDial.kind)value=Math.round(value);setAlphaParams({[alphaDial.id]:value})};
+  const applyAlphaPreset=async(next:number)=>{const index=(next+ALPHA_ALL_PRESETS.length)%ALPHA_ALL_PRESETS.length,preset:AlphaPatch=ALPHA_ALL_PRESETS[index];setAlphaPresetIndex(index);setModifyAmount([0,0,0,0]);const values={...initialAlphaValues(),...preset.values};setAlphaValues(values);if(await ensureAudio())for(const [id,v] of Object.entries(values))workstation.setAlphaParam(+id as AlphaParamId,v)};
+  const applyToneModify=(delta:number)=>{
+    const params=toneModify==='BRILLIANCE'?[ALPHA_PARAM.cutoff,ALPHA_PARAM.hpf,ALPHA_PARAM.resonance]:toneModify==='MOD RATE'?[ALPHA_PARAM.lfoRate,ALPHA_PARAM.pwmRate]:toneModify==='MOD DEPTH'?[ALPHA_PARAM.dcoMod,ALPHA_PARAM.vcfMod,ALPHA_PARAM.pwmDepth]:[ALPHA_PARAM.attack,ALPHA_PARAM.decay,ALPHA_PARAM.release];
+    void workstation.applyAlphaToneModify(delta,MODIFY_RUNTIME_INDEX[modifyIndex],params).then(({amount,values})=>{
+      setAlphaValues(current=>({...current,...Object.fromEntries(params.map((id,index)=>[id,values[index]]))}));
+      setModifyAmount(current=>{const next=[...current] as [number,number,number,number];next[modifyIndex]=clamp(Math.round(amount*8),-8,8);return next});
+    }).catch(error=>setMessage(`Tone Modify failed: ${String(error)}`));
+  };
+
+  const releaseSource=useCallback((source:string)=>{const entry=activeRef.current.get(source);if(!entry)return;activeRef.current.delete(source);if(entry.part==='mini')workstation.miniNoteOff(entry.note);else if(entry.part==='alpha')workstation.alphaNoteOff(entry.note);else if(entry.part==='bass808'){const remaining=[...activeRef.current.values()].filter(v=>v.part==='bass808');if(remaining.length)workstation.bassNoteOn(remaining.at(-1)!.note);else workstation.bassNoteOff()}setHeld([...new Set([...activeRef.current.values()].map(v=>v.note))])},[]);
+  const triggerSource=useCallback(async(source:string,note:number,index:number)=>{if(activeRef.current.has(source)||!await ensureAudio())return;const p=partRef.current;activeRef.current.set(source,{note,part:p});if(p==='mini')workstation.miniNoteOn(note,104);else if(p==='alpha')workstation.alphaNoteOn(note,96);else if(p==='bass808')workstation.bassNoteOn(note);else workstation.triggerDrum((index%8) as Drum808VoiceId,104,false);setHeld([...new Set([...activeRef.current.values()].map(v=>v.note))])},[ensureAudio]);
+  useEffect(()=>{const down=(e:KeyboardEvent)=>{const target=e.target as HTMLElement|null;if(target?.matches('input,textarea,select,[contenteditable="true"]'))return;const i=COMPUTER_KEYS.indexOf(e.code);if(i<0||e.repeat)return;e.preventDefault();void triggerSource(`kbd:${e.code}`,53+i+octave*12,i)};const up=(e:KeyboardEvent)=>{if(activeRef.current.has(`kbd:${e.code}`)){e.preventDefault();releaseSource(`kbd:${e.code}`)}};window.addEventListener('keydown',down);window.addEventListener('keyup',up);return()=>{window.removeEventListener('keydown',down);window.removeEventListener('keyup',up)}},[octave,releaseSource,triggerSource]);
+
+  const runtimeScene=():WorkstationScene=>({...scene,bpm:tempo,swing,bassPattern:{...bassPattern,bpm:tempo,swing},drumPattern:{...drumPattern,bpm:tempo,swing},bassPatch:{...scene.bassPatch,values:{...bassValues}},alphaPatch:{...scene.alphaPatch,values:{...alphaValues}}});
+  const loadScene=async(next:number)=>{const index=(next+WORKSTATION_SCENES.length)%WORKSTATION_SCENES.length,s=WORKSTATION_SCENES[index],bp=cloneBass(index),dp=cloneDrums(index),ml=createMiniLane(index),al=createAlphaLane(index),wasPlaying=playing;if(wasPlaying)workstation.stop();setSceneIndex(index);setTempo(s.bpm);setSwing(s.swing);setBassPattern(bp);setDrumPattern(dp);setMiniLane(ml);setAlphaLane(al);setBassValues({...initialValues(BASS),...s.bassPatch.values});setAlphaValues(v=>({...v,...s.alphaPatch.values}));setModifyAmount([0,0,0,0]);if(await ensureAudio()){workstation.setSceneIndex(index);await workstation.loadScene(s);pushSequence(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
   const toggleTransport=async()=>{if(playing){workstation.stop();setPlaying(false);return}if(!await ensureAudio())return;await workstation.loadScene(runtimeScene());pushSequence();workstation.play();setPlaying(true)};
   const changePart=(next:WorkstationPartId)=>{for(const source of [...activeRef.current.keys()])releaseSource(source);setGlobalPage(null);setPartId(next)};
   const cyclePart=(delta=1)=>changePart(PARTS[(PARTS.indexOf(partId)+delta+PARTS.length)%PARTS.length]);
