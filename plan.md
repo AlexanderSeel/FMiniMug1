@@ -215,8 +215,8 @@ Source of truth: `shared/workstation.json`.
 - [x] Device & Install view uses the established FM-1 WebMIDI SysEx query to request read-only device identity, rejects ambiguous multiple-device matches, and reports base firmware vs update-loader identity.
 - [x] Felucca-compatible OTA protocol path implemented: `.fwsc` identity extraction, SHA-256 verification, device/model check, loader handoff, bounded request serving, resume and returned-version verification.
 - [x] Protocol tests cover SysEx packing/checksums, identity modes, package extraction/hash and write-gate rejection.
-- [x] Device & Install view can query GitHub for the newest published release, including prereleases, and show release notes plus any matching hardware OTA package declared by its release manifest.
-- [x] OTA eligibility requires a product/tag-matched manifest, `hardware_installable=true`, a same-release `.fwsc` asset, FM-1 model and valid SHA-256; download verifies the digest and package identity before handing it to the OTA path. Current diagnostic-only beta remains ineligible.
+- [x] Device & Install view can query GitHub for the newest published release, including prereleases, and read release metadata through the CORS-enabled Releases API without fetching cross-origin release assets.
+- [x] OTA eligibility requires product/tag-matched release metadata, `hardware_installable=true`, a same-release `.fwsc` asset, FM-1 model and matching GitHub SHA-256. The package is downloaded by normal browser navigation, then selected locally and checked for digest and identity. Current diagnostic-only beta remains ineligible.
 - [ ] Keep the firmware write gate closed and `.fwsc` packaging unavailable until mapped controls, real CPU LAST / MAX / OVER and stock V15 recovery are validated.
 
 ## Milestone I — Presets / demos / regression content 🚧
@@ -255,7 +255,7 @@ Source of truth: `shared/workstation.json`.
 - [ ] Port the four-lane workstation transport from the WASM integration layer into the mapped FM-1 runtime.
 - [x] Browser read-only identity handshake implemented in the same Device & Install web app; no package is loaded and no firmware bytes are sent.
 - [x] Complete updater transaction code is present behind a hard-disabled gate; the app currently allows only read-only identity checks and cannot start or resume a firmware write.
-- [x] Latest published release discovery is integrated into the same web app and only offers an OTA download when that release declares a matching FM-1 package and checksum; downloaded bytes are checked for SHA-256 and package identity. It does not mark beta ZIPs or raw diagnostics installable.
+- [x] Latest release discovery uses the CORS-enabled GitHub Releases API; OTA downloads use a normal link and local file selection, then validate SHA-256 and package identity. Beta ZIPs and raw diagnostics remain ineligible.
 - [ ] Validate stock V15 return/recovery path on a real FM-1.
 - [ ] Only after physical controls, CPU `LAST / MAX / OVER`, identity and recovery gates pass, consider installable firmware.
 - [ ] Only then consider `.fwsc` packaging and browser OTA installation.

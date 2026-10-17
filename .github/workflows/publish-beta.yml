@@ -244,6 +244,18 @@ jobs:
 
           **Those files are not an FM-1 firmware installer and are not declared safe to flash. No .fwsc is included.** A real hardware installer will only be enabled after physical control mapping, CPU/OVER testing and recovery validation are complete.
           EOF
+          python3 - "$TAG" release/out/manifest.json >> release-notes.md <<'PY'
+          import json,sys
+          tag,manifest_path=sys.argv[1:]
+          manifest=json.load(open(manifest_path,encoding='utf-8'))
+          metadata={
+              'product':manifest['product'],
+              'tag':tag,
+              'hardware_installable':manifest['hardware_installable'],
+              'hardware_flash_package':manifest['hardware_flash_package']
+          }
+          print('\n<!-- FM1-OTA-METADATA '+json.dumps(metadata,separators=(',',':'))+' -->')
+          PY
 
       - name: Create prerelease
         if: steps.beta.outputs.publish == 'true'
