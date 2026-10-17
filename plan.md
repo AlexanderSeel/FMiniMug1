@@ -264,7 +264,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Windows GitHub Actions smoke test installs the package, serves it on localhost, verifies COOP/COEP + WASM MIME and rejects a tampered package.
 - [x] `v0.3.0-beta.3` is the first release with the hardened checksum-verifying installer and verified Alpha-Dial/Tone-Modify workstation path.
 - [x] `v0.3.0-beta.4` adds the self-contained Windows virtual installer and install/upgrade/uninstall smoke verification.
-- [ ] `v0.3.0-beta.5` candidate: same-app Device & Install view and first hardware diagnostic report flow; hardware images remain NON-INSTALLABLE.
+- [x] `v0.3.0-beta.5` published: same-app Device & Install view and first hardware diagnostic report flow; hardware images remain NON-INSTALLABLE.
 - [ ] Validate the packaged Windows installer manually on a clean Windows user profile outside CI.
 - [ ] Add signed/native desktop packaging later if the local-browser launcher proves useful enough.
 - [ ] Add FM-1 browser OTA installer only after the mapped firmware/recovery gates are complete.
