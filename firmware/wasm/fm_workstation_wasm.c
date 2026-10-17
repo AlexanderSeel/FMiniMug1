@@ -147,6 +147,31 @@ __attribute__((visibility("default"))) void fmw_wasm_set_fx(int param, float val
     fmw_fx_set_param(&fx, (fmw_fx_param_t)param, runtime_state.fx[param]);
   }
 }
+__attribute__((visibility("default"))) int fmw_wasm_runtime_set(int field, int index, float value) {
+  ensure_init();
+  if (field < (int)FMW_RUNTIME_FIELD_SCENE || field > (int)FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT || index < 0 || index > 255) return 0;
+  const uint8_t was_playing = runtime_state.playing;
+  if (!fmw_runtime_set_value(&runtime_state, (fmw_runtime_field_t)field, (uint8_t)index, value)) return 0;
+  if (field == (int)FMW_RUNTIME_FIELD_FX) {
+    fmw_fx_set_param(&fx, (fmw_fx_param_t)index, runtime_state.fx[index]);
+  } else if (field == (int)FMW_RUNTIME_FIELD_CLOCK_LENGTH || field == (int)FMW_RUNTIME_FIELD_CLOCK_BPM || field == (int)FMW_RUNTIME_FIELD_CLOCK_SWING) {
+    fmw_seq_clock_configure(&clock_state, &runtime_state.clock);
+  } else if (field == (int)FMW_RUNTIME_FIELD_PLAYING) {
+    if (runtime_state.playing != was_playing) {
+      if (runtime_state.playing) fmw_seq_clock_start(&clock_state);
+      else {
+        fmw_seq_clock_stop(&clock_state);
+        mini_seq_off(); fmb808_note_off(&bass); bass_gate_left = 0u; alpha_seq_off();
+      }
+    }
+  }
+  return 1;
+}
+__attribute__((visibility("default"))) float fmw_wasm_runtime_get(int field, int index) {
+  ensure_init();
+  if (field < (int)FMW_RUNTIME_FIELD_SCENE || field > (int)FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT || index < 0 || index > 255) return 0.0f;
+  return fmw_runtime_get_value(&runtime_state, (fmw_runtime_field_t)field, (uint8_t)index);
+}
 __attribute__((visibility("default"))) void fmw_wasm_mini_param(int id, float value) { ensure_init(); fmm_set_param(id, value); }
 __attribute__((visibility("default"))) void fmw_wasm_mini_note_on(int note, int velocity) { ensure_init(); fmm_note_on(note, velocity); }
 __attribute__((visibility("default"))) void fmw_wasm_mini_note_off(int note) { ensure_init(); fmm_note_off_note(note); }
@@ -219,9 +244,12 @@ __attribute__((visibility("default"))) void fmw_wasm_alpha_note_off(int note) { 
 
 __attribute__((visibility("default"))) void fmw_wasm_seq_meta(int length, int bpm, int swing) {
   ensure_init();
-  if (length < 1) length = 1; if (length > FMW_PATTERN_STEPS) length = FMW_PATTERN_STEPS;
-  if (bpm < 40) bpm = 40; if (bpm > 300) bpm = 300;
-  if (swing < 0) swing = 0; if (swing > 75) swing = 75;
+  if (length < 1) length = 1;
+  if (length > FMW_PATTERN_STEPS) length = FMW_PATTERN_STEPS;
+  if (bpm < 40) bpm = 40;
+  if (bpm > 300) bpm = 300;
+  if (swing < 0) swing = 0;
+  if (swing > 75) swing = 75;
   fmw_runtime_set_clock(&runtime_state, (uint8_t)length, (uint16_t)bpm, (uint8_t)swing);
   fmw_seq_clock_configure(&clock_state, &runtime_state.clock);
 }
@@ -237,7 +265,12 @@ __attribute__((visibility("default"))) void fmw_wasm_seq_drum_step(int index, in
 __attribute__((visibility("default"))) void fmw_wasm_seq_alpha_step(int index, int note0, int note1, int note2, int note3, int velocity, int gate) {
   ensure_init(); if (index < 0 || index >= FMW_PATTERN_STEPS) return; const int notes[FMW_ALPHA_NOTES] = {note0,note1,note2,note3};
   for (int n = 0; n < FMW_ALPHA_NOTES; ++n) { int note = notes[n]; if (note < -1) note = -1; if (note > 127) note = 127; alpha_steps[index].note[n] = (int8_t)note; }
-  if (velocity < 1) velocity = 1; if (velocity > 127) velocity = 127; if (gate < 1) gate = 1; if (gate > 400) gate = 400; alpha_steps[index].velocity = (uint8_t)velocity; alpha_steps[index].gate = (uint16_t)gate;
+  if (velocity < 1) velocity = 1;
+  if (velocity > 127) velocity = 127;
+  if (gate < 1) gate = 1;
+  if (gate > 400) gate = 400;
+  alpha_steps[index].velocity = (uint8_t)velocity;
+  alpha_steps[index].gate = (uint16_t)gate;
 }
 __attribute__((visibility("default"))) void fmw_wasm_seq_start(void) { ensure_init(); fmw_runtime_start(&runtime_state); fmw_seq_clock_start(&clock_state); }
 __attribute__((visibility("default"))) void fmw_wasm_seq_stop(void) { ensure_init(); fmw_runtime_stop(&runtime_state); fmw_seq_clock_stop(&clock_state); mini_seq_off(); fmb808_note_off(&bass); bass_gate_left = 0u; alpha_seq_off(); }

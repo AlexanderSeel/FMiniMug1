@@ -8,6 +8,22 @@
 #define FMW_RUNTIME_ALPHA_MODIFY_COUNT 4u
 #define FMW_RUNTIME_ALPHA_PARAM_COUNT 30u
 
+/* Stable numeric field IDs used by the pointer-free WASM runtime ABI. */
+typedef enum {
+  FMW_RUNTIME_FIELD_SCENE = 0,
+  FMW_RUNTIME_FIELD_PLAYING = 1,
+  FMW_RUNTIME_FIELD_MASTER = 2,
+  FMW_RUNTIME_FIELD_PART_LEVEL = 3,
+  FMW_RUNTIME_FIELD_FX = 4,
+  FMW_RUNTIME_FIELD_CLOCK_LENGTH = 5,
+  FMW_RUNTIME_FIELD_CLOCK_BPM = 6,
+  FMW_RUNTIME_FIELD_CLOCK_SWING = 7,
+  FMW_RUNTIME_FIELD_ALPHA_PARAM = 8,
+  FMW_RUNTIME_FIELD_ALPHA_FOCUS = 9,
+  FMW_RUNTIME_FIELD_ALPHA_MODIFY = 10,
+  FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT = 11
+} fmw_runtime_field_t;
+
 typedef enum {
   FMW_ALPHA_FOCUS_PARAM = 0,
   FMW_ALPHA_FOCUS_VALUE = 1
@@ -49,3 +65,5 @@ void fmw_runtime_toggle_alpha_focus(fmw_runtime_t *state);
 void fmw_runtime_set_alpha_modify(fmw_runtime_t *state, uint8_t modify);
 void fmw_runtime_step_alpha_modify(fmw_runtime_t *state, int delta);
 void fmw_runtime_set_alpha_modify_amount(fmw_runtime_t *state, uint8_t modify, float amount);
+int fmw_runtime_set_value(fmw_runtime_t *state, fmw_runtime_field_t field, uint8_t index, float value);
+float fmw_runtime_get_value(const fmw_runtime_t *state, fmw_runtime_field_t field, uint8_t index);

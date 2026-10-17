@@ -78,6 +78,34 @@ int main(void) {
   fmw_runtime_set_alpha_modify_amount(&state, FMW_ALPHA_MODIFY_DEPTH, -5.0f);
   assert(nearf(state.alpha_modify_amount[FMW_ALPHA_MODIFY_DEPTH], -1.0f));
 
-  puts("workstation runtime state tests passed");
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_SCENE, 0u, 3.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_PLAYING, 0u, 1.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_MASTER, 0u, 0.35f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_PART_LEVEL, FMW_PART_DRUM808, 0.25f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_FX, 1u, 0.4f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_CLOCK_LENGTH, 0u, 32.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_CLOCK_BPM, 0u, 128.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_CLOCK_SWING, 0u, 18.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_PARAM, 0u, 17.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u, 1.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY, 0u, FMW_ALPHA_MODIFY_DEPTH));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_ALPHA_MODIFY_DEPTH, 0.625f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_SCENE, 0u), 3.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_PLAYING, 0u), 1.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_MASTER, 0u), 0.35f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_PART_LEVEL, FMW_PART_DRUM808), 0.25f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_FX, 1u), 0.4f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_CLOCK_LENGTH, 0u), 32.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_CLOCK_BPM, 0u), 128.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_CLOCK_SWING, 0u), 18.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_PARAM, 0u), 17.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u), 1.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY, 0u), FMW_ALPHA_MODIFY_DEPTH));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_ALPHA_MODIFY_DEPTH), 0.625f));
+  assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_PARAM, 0u, FMW_RUNTIME_ALPHA_PARAM_COUNT));
+  assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_RUNTIME_ALPHA_MODIFY_COUNT, 0.5f));
+  assert(!fmw_runtime_set_value(&state, (fmw_runtime_field_t)99, 0u, 0.0f));
+
+  puts("workstation runtime state and indexed ABI tests passed");
   return 0;
 }

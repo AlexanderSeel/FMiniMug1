@@ -98,3 +98,78 @@ void fmw_runtime_set_alpha_modify_amount(fmw_runtime_t *state, uint8_t modify, f
   if (!state || modify >= FMW_RUNTIME_ALPHA_MODIFY_COUNT) return;
   state->alpha_modify_amount[modify] = clampf(amount, -1.0f, 1.0f);
 }
+
+int fmw_runtime_set_value(fmw_runtime_t *state, fmw_runtime_field_t field, uint8_t index, float value) {
+  if (!state || value != value) return 0;
+  switch (field) {
+    case FMW_RUNTIME_FIELD_SCENE:
+      if (index != 0u || value < 0.0f || value > 255.0f) return 0;
+      fmw_runtime_set_scene(state, (uint8_t)value);
+      return 1;
+    case FMW_RUNTIME_FIELD_PLAYING:
+      if (index != 0u) return 0;
+      if (value >= 0.5f) fmw_runtime_start(state); else fmw_runtime_stop(state);
+      return 1;
+    case FMW_RUNTIME_FIELD_MASTER:
+      if (index != 0u) return 0;
+      fmw_runtime_set_master(state, value);
+      return 1;
+    case FMW_RUNTIME_FIELD_PART_LEVEL:
+      if (index >= FMW_RUNTIME_PART_COUNT) return 0;
+      fmw_runtime_set_part_level(state, index, value);
+      return 1;
+    case FMW_RUNTIME_FIELD_FX:
+      if (index >= FMW_RUNTIME_FX_COUNT) return 0;
+      fmw_runtime_set_fx(state, index, value);
+      return 1;
+    case FMW_RUNTIME_FIELD_CLOCK_LENGTH:
+      if (index != 0u || value < 1.0f || value > (float)FMW_SEQ_MAX_STEPS) return 0;
+      fmw_runtime_set_clock(state, (uint8_t)value, state->clock.bpm, state->clock.swing);
+      return 1;
+    case FMW_RUNTIME_FIELD_CLOCK_BPM:
+      if (index != 0u || value < 40.0f || value > 300.0f) return 0;
+      fmw_runtime_set_clock(state, state->clock.length, (uint16_t)value, state->clock.swing);
+      return 1;
+    case FMW_RUNTIME_FIELD_CLOCK_SWING:
+      if (index != 0u || value < 0.0f || value > 75.0f) return 0;
+      fmw_runtime_set_clock(state, state->clock.length, state->clock.bpm, (uint8_t)value);
+      return 1;
+    case FMW_RUNTIME_FIELD_ALPHA_PARAM:
+      if (index != 0u || value < 0.0f || value >= (float)FMW_RUNTIME_ALPHA_PARAM_COUNT) return 0;
+      fmw_runtime_set_alpha_param(state, (uint8_t)value);
+      return 1;
+    case FMW_RUNTIME_FIELD_ALPHA_FOCUS:
+      if (index != 0u) return 0;
+      state->alpha_focus = value >= 0.5f ? FMW_ALPHA_FOCUS_VALUE : FMW_ALPHA_FOCUS_PARAM;
+      return 1;
+    case FMW_RUNTIME_FIELD_ALPHA_MODIFY:
+      if (index != 0u || value < 0.0f || value >= (float)FMW_RUNTIME_ALPHA_MODIFY_COUNT) return 0;
+      fmw_runtime_set_alpha_modify(state, (uint8_t)value);
+      return 1;
+    case FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT:
+      if (index >= FMW_RUNTIME_ALPHA_MODIFY_COUNT) return 0;
+      fmw_runtime_set_alpha_modify_amount(state, index, value);
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+float fmw_runtime_get_value(const fmw_runtime_t *state, fmw_runtime_field_t field, uint8_t index) {
+  if (!state) return 0.0f;
+  switch (field) {
+    case FMW_RUNTIME_FIELD_SCENE: return index == 0u ? (float)state->scene : 0.0f;
+    case FMW_RUNTIME_FIELD_PLAYING: return index == 0u ? (float)state->playing : 0.0f;
+    case FMW_RUNTIME_FIELD_MASTER: return index == 0u ? state->master_level : 0.0f;
+    case FMW_RUNTIME_FIELD_PART_LEVEL: return index < FMW_RUNTIME_PART_COUNT ? state->part_level[index] : 0.0f;
+    case FMW_RUNTIME_FIELD_FX: return index < FMW_RUNTIME_FX_COUNT ? state->fx[index] : 0.0f;
+    case FMW_RUNTIME_FIELD_CLOCK_LENGTH: return index == 0u ? (float)state->clock.length : 0.0f;
+    case FMW_RUNTIME_FIELD_CLOCK_BPM: return index == 0u ? (float)state->clock.bpm : 0.0f;
+    case FMW_RUNTIME_FIELD_CLOCK_SWING: return index == 0u ? (float)state->clock.swing : 0.0f;
+    case FMW_RUNTIME_FIELD_ALPHA_PARAM: return index == 0u ? (float)state->alpha_param : 0.0f;
+    case FMW_RUNTIME_FIELD_ALPHA_FOCUS: return index == 0u ? (float)state->alpha_focus : 0.0f;
+    case FMW_RUNTIME_FIELD_ALPHA_MODIFY: return index == 0u ? (float)state->alpha_modify : 0.0f;
+    case FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT: return index < FMW_RUNTIME_ALPHA_MODIFY_COUNT ? state->alpha_modify_amount[index] : 0.0f;
+    default: return 0.0f;
+  }
+}

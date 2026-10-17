@@ -68,6 +68,8 @@ emcc \
   -Wl,--export=fmw_wasm_init \
   -Wl,--export=fmw_wasm_reset \
   -Wl,--export=fmw_wasm_set_level \
+  -Wl,--export=fmw_wasm_runtime_set \
+  -Wl,--export=fmw_wasm_runtime_get \
   -Wl,--export=fmw_wasm_mini_param \
   -Wl,--export=fmw_wasm_mini_note_on \
   -Wl,--export=fmw_wasm_mini_note_off \
