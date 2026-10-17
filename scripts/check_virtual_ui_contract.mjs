@@ -11,6 +11,7 @@ const forbidText=(text,needle,context)=>{if(text.includes(needle))fail(`${contex
 const main=read('web/src/main.tsx');
 const ui=read('web/src/FM1WorkstationNext.tsx');
 const uiCss=read('web/src/fm1Next.css');
+const deviceCss=read('web/src/fm1Virtual.css');
 const workstation=read('web/src/audio/workstation.ts');
 const midiIdentity=read('web/src/audio/fm1MidiIdentity.ts');
 const runtimeHeader=read('firmware/include/fm_workstation_runtime.h');
@@ -84,6 +85,8 @@ for(const token of [
   "label=\"SELECT\"",
   "label=\"PRESETS\"",
   "label=\"ALGORITHM\"",
+  "label={`KNOB ${i+1}`}",
+  "['FX','SEL','ENV','LFO','HOME','SAVE','ARP','SEQ','EDIT','GLO','PLAY/STOP','REC']",
   "onPointerDown",
   "onPointerUp",
   "window.addEventListener('keydown'",
@@ -91,6 +94,11 @@ for(const token of [
   "workstation.play()",
   "workstation.stop()"
 ]) requireText(ui,token,'active virtual FM-1');
+for(const token of [
+  '.fm1FunctionGrid{display:grid;grid-template-columns:repeat(4,minmax(58px,1fr))',
+  '.fm1Keybed button small{display:none}',
+  '.fm1FunctionGrid{grid-template-columns:repeat(4,minmax(58px,1fr))}'
+]) requireText(deviceCss,token,'physical FM-1 panel layout');
 for(const token of [
   "setAlphaFocus(v=>v==='param'?'value':'param')",
   'setModifyIndex(v=>(v+1)%MODIFY_NAMES.length)'

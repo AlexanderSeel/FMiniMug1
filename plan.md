@@ -193,6 +193,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Beta build injects its exact release tag so in-app downloads point at the matching Windows installer and NON-INSTALLABLE hardware test ZIP.
 - [x] Hardware test report saves locally and exports device/control notes plus CPU LAST / MAX / OVER and audio observations as JSON.
 - [x] Refined virtual-device geometry keeps the FM-1 display/control/keybed proportions compact instead of using the oversized legacy web surface.
+- [x] Virtual FM-1 front panel follows the hardware layout: 2×2 left controls, centered display, four KNOB encoders, the physical 4×3 function-button order and the staggered 27-pad bed; software note names stay off the silicone keys.
 - [x] Lightweight Virtual-FM1 CI contract checks active surface, 27-key map, Alpha-Dial/Tone-Modify hooks, physical labels and transport hooks.
 - [ ] Pixel-identical native 240×240 UI rendered to WASM/canvas.
 - [ ] Deterministic WAV capture / regression render.
