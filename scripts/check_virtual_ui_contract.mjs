@@ -61,8 +61,8 @@ for(const token of [
   "label=\"ALGORITHM\"",
   "onPointerDown",
   "onPointerUp",
-  "addEventListener('keydown'",
-  "addEventListener('keyup'",
+  "window.addEventListener('keydown'",
+  "window.addEventListener('keyup'",
   "workstation.play()",
   "workstation.stop()"
 ]) requireText(ui,token,'active virtual FM-1');
