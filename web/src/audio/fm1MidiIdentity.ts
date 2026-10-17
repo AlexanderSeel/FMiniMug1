@@ -173,6 +173,11 @@ class MidiLink {
   close() { this.input.onmidimessage = null; }
 }
 
+async function closeMidiLink(link: MidiLink): Promise<void> {
+  link.close();
+  await Promise.allSettled([link.input.close(), link.output.close()]);
+}
+
 function candidatePairs(access: MIDIAccess): MidiPair[] {
   const outputs = [...access.outputs.values()].filter(port => port.state !== 'disconnected');
   const pairs: MidiPair[] = [];
@@ -206,8 +211,7 @@ async function openDevice(access: MIDIAccess, accepts: (identity: ParsedIdentity
     const link = new MidiLink(pair.input, pair.output);
     const identity = await handshake(link, 2);
     if (identity && accepts(identity)) return { link, identity, portName: pair.input.name || 'FM-1 USB MIDI' };
-    link.close();
-    await Promise.allSettled([pair.input.close(), pair.output.close()]);
+    await closeMidiLink(link);
   }
   return null;
 }
@@ -222,8 +226,7 @@ export async function readFM1Identity(): Promise<FM1MidiIdentity> {
   const device = await openDevice(access, () => true);
   if (!device) throw new Error('No FM-1 identity response. Check USB and close other MIDI applications.');
   const result = { ...device.identity, portName: device.portName };
-  device.link.close();
-  await Promise.allSettled([device.link.input.close(), device.link.output.close()]);
+  await closeMidiLink(device.link);
   return result;
 }
 
@@ -278,35 +281,39 @@ export async function installFm1Firmware(file: File, expectedSha256: string, onP
   const device = await openDevice(access, identity => !identity.isUpdateLoader);
   if (!device) throw new Error('FM-1 not found. Check USB and close other MIDI applications.');
   if (device.identity.model !== model) {
-    device.link.close();
-    await Promise.allSettled([device.link.input.close(), device.link.output.close()]);
+    await closeMidiLink(device.link);
     throw new Error(`Connected device is ${device.identity.product}; package is ${firmware.product}.`);
   }
 
   onProgress('identity', `Matched ${device.identity.product} on ${device.portName}.`);
-  if (!device.link.send(OTA_HANDOFF)) throw new Error('Could not request the FM-1 update-loader handoff.');
-  onProgress('handoff', 'Waiting for firmware preflight handoff.');
-  await sleep(2000);
-  const preflight = await serveReadRequests(device.link, firmware.image, 0xe0000000, 8000, 'preflight', onProgress);
-  device.link.close();
-  await Promise.allSettled([device.link.input.close(), device.link.output.close()]);
+  let preflight: ServeResult;
+  try {
+    if (!device.link.send(OTA_HANDOFF)) throw new Error('Could not request the FM-1 update-loader handoff.');
+    onProgress('handoff', 'Waiting for firmware preflight handoff.');
+    await sleep(2000);
+    preflight = await serveReadRequests(device.link, firmware.image, 0xe0000000, 8000, 'preflight', onProgress);
+  } finally {
+    await closeMidiLink(device.link);
+  }
   if (!preflight.finished) throw new Error(preflight.disconnected ? 'FM-1 disconnected during preflight; reconnect and retry.' : 'FM-1 did not complete preflight handoff.');
 
   onProgress('loader', 'Waiting for the FM-1 update loader.');
   await sleep(3000);
   const loader = await waitForDevice(access, identity => identity.model === `ota-${model}`, 30000);
   if (!loader) throw new Error('Update loader did not appear. Reconnect USB; the device should remain in update mode.');
-  const transfer = await serveReadRequests(loader.link, firmware.image, 0xf0000000, 180000, 'transfer', onProgress);
-  loader.link.close();
-  await Promise.allSettled([loader.link.input.close(), loader.link.output.close()]);
+  let transfer: ServeResult;
+  try {
+    transfer = await serveReadRequests(loader.link, firmware.image, 0xf0000000, 180000, 'transfer', onProgress);
+  } finally {
+    await closeMidiLink(loader.link);
+  }
   if (!transfer.finished) throw new Error(transfer.disconnected ? 'Loader disconnected during transfer; reconnect and use resume.' : 'Loader transfer stopped; reconnect and use resume.');
 
   onProgress('reboot', 'Waiting for the updated FM-1 to reboot.');
   await sleep(3000);
   const returned = await waitForDevice(access, identity => !identity.isUpdateLoader, 40000);
   if (!returned) throw new Error('FM-1 did not return after transfer. Power-cycle and verify its identity.');
-  returned.link.close();
-  await Promise.allSettled([returned.link.input.close(), returned.link.output.close()]);
+  await closeMidiLink(returned.link);
   if (returned.identity.product !== firmware.product) throw new Error(`FM-1 returned as ${returned.identity.product}; expected ${firmware.product}.`);
   onProgress('complete', `Verified returned firmware ${returned.identity.product}.`);
   return returned.identity.product;
@@ -324,16 +331,18 @@ export async function resumeFm1Firmware(file: File, expectedSha256: string, onPr
   const loader = await openDevice(access, identity => identity.model === `ota-${model}`);
   if (!loader) return false;
   onProgress('loader', 'Resuming transfer in the update loader.');
-  const transfer = await serveReadRequests(loader.link, firmware.image, 0xf0000000, 180000, 'transfer', onProgress);
-  loader.link.close();
-  await Promise.allSettled([loader.link.input.close(), loader.link.output.close()]);
+  let transfer: ServeResult;
+  try {
+    transfer = await serveReadRequests(loader.link, firmware.image, 0xf0000000, 180000, 'transfer', onProgress);
+  } finally {
+    await closeMidiLink(loader.link);
+  }
   if (!transfer.finished) return false;
   onProgress('reboot', 'Waiting for the FM-1 to return after resume.');
   await sleep(3000);
   const returned = await waitForDevice(access, identity => !identity.isUpdateLoader, 40000);
   if (!returned) throw new Error('FM-1 did not return after resumed transfer.');
-  returned.link.close();
-  await Promise.allSettled([returned.link.input.close(), returned.link.output.close()]);
+  await closeMidiLink(returned.link);
   if (returned.identity.product !== firmware.product) throw new Error(`FM-1 returned as ${returned.identity.product}; expected ${firmware.product}.`);
   onProgress('complete', `Verified returned firmware ${returned.identity.product}.`);
   return true;
