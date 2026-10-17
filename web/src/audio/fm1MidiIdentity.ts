@@ -106,6 +106,7 @@ export function parseFM1IdentityMessage(packet: ArrayLike<number>): ParsedIdenti
   const product = String.fromCharCode(...body.slice(6, 33)).replace(/\0+$/, '');
   const match = /^([^_]+)_(\d+)$/.exec(product);
   if (!match) return null;
+  if (match[1] !== 'FM-1' && match[1] !== 'ota-FM-1') return null;
   return { product, model: match[1], version: Number(match[2]), isUpdateLoader: /^ota-/i.test(match[1]) };
 }
 

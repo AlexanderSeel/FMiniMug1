@@ -29,6 +29,9 @@ jobs:
       - name: Test FM-1 WebMIDI OTA protocol and locked hardware write gate
         working-directory: .
         run: node tests/test_fm1_ota_protocol.mjs
+      - name: Test latest FM-1 release discovery and OTA eligibility
+        working-directory: .
+        run: node tests/test_fm1_latest_release.mjs
       - name: Build native WASM + web app
         run: npm run build
       - name: Verify native DSP web artifacts

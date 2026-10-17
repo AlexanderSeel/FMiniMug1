@@ -51,6 +51,7 @@ assert.deepEqual(protocol.parseFM1IdentityMessage(identityPacket('FM-1_015')),
   {product:'FM-1_015',model:'FM-1',version:15,isUpdateLoader:false});
 assert.deepEqual(protocol.parseFM1IdentityMessage(identityPacket('ota-FM-1_015')),
   {product:'ota-FM-1_015',model:'ota-FM-1',version:15,isUpdateLoader:true});
+assert.equal(protocol.parseFM1IdentityMessage(identityPacket('OTHER_015')),null,'unrelated product identity is rejected');
 
 const packageBytes=new Uint8Array(128*1024);
 const product='FM-1_015';
