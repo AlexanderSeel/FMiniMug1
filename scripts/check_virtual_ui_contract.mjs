@@ -41,10 +41,20 @@ for(const token of [
 ]) requireText(ui,token,'in-app device and installation view');
 requireText(uiCss,'.workspaceNav','in-app workspace navigation styles');
 requireText(uiCss,'.deviceInstall','in-app device view styles');
-for(const token of ['IDENTITY_QUERY','requestMIDIAccess({ sysex: true })','More than one possible FM-1 MIDI device'])
-  requireText(midiIdentity,token,'read-only FM-1 WebMIDI identity handshake');
-for(const token of ['UPGRADE','write(','install('])
-  forbidText(midiIdentity,token,'identity module must remain read-only');
+for(const token of [
+  'IDENTITY_QUERY',
+  'requestMIDIAccess({ sysex: true })',
+  'More than one possible FM-1 MIDI device',
+  'export async function inspectFm1Package',
+  'export async function installFm1Firmware',
+  'export async function resumeFm1Firmware',
+  '0xe0000000',
+  '0xf0000000',
+  "returned.identity.product !== firmware.product"
+]) requireText(midiIdentity,token,'FM-1 WebMIDI OTA protocol');
+requireText(midiIdentity,'const HARDWARE_OTA_ENABLED = false;','FM-1 physical write safety gate');
+requireText(midiIdentity,'ensureWriteGateClosed();','FM-1 physical write safety gate');
+for(const token of ['generateFwsc','createFwsc']) forbidText(midiIdentity,token,'firmware package generation remains disabled');
 
 const alpha=manifest.parts.find(p=>p.id==='alpha');
 if(!alpha)fail('shared manifest has no ALPHA part');

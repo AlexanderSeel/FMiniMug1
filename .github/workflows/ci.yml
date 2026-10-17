@@ -26,6 +26,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y emscripten
       - run: npm install
+      - name: Test FM-1 WebMIDI OTA protocol and locked hardware write gate
+        working-directory: .
+        run: node tests/test_fm1_ota_protocol.mjs
       - name: Build native WASM + web app
         run: npm run build
       - name: Verify native DSP web artifacts
