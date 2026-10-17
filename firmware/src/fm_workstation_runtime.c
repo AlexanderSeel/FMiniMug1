@@ -79,9 +79,10 @@ void fmw_runtime_step_alpha_param(fmw_runtime_t *state, int delta) {
   state->alpha_param = wrap_u8((int)state->alpha_param + delta, FMW_RUNTIME_ALPHA_PARAM_COUNT);
 }
 
-void fmw_runtime_toggle_alpha_focus(fmw_runtime_t *state) {
+void fmw_runtime_set_alpha_focus(fmw_runtime_t *state, fmw_alpha_focus_t focus) {
   if (!state) return;
-  state->alpha_focus = state->alpha_focus == FMW_ALPHA_FOCUS_PARAM ? FMW_ALPHA_FOCUS_VALUE : FMW_ALPHA_FOCUS_PARAM;
+  if (focus < FMW_ALPHA_FOCUS_PARAM || focus > FMW_ALPHA_FOCUS_TONE_MODIFY) return;
+  state->alpha_focus = focus;
 }
 
 void fmw_runtime_set_alpha_modify(fmw_runtime_t *state, uint8_t modify) {
@@ -140,7 +141,8 @@ int fmw_runtime_set_value(fmw_runtime_t *state, fmw_runtime_field_t field, uint8
       return 1;
     case FMW_RUNTIME_FIELD_ALPHA_FOCUS:
       if (index != 0u) return 0;
-      state->alpha_focus = value >= 0.5f ? FMW_ALPHA_FOCUS_VALUE : FMW_ALPHA_FOCUS_PARAM;
+      if (value < (float)FMW_ALPHA_FOCUS_PARAM || value > (float)FMW_ALPHA_FOCUS_TONE_MODIFY || value != (float)(int)value) return 0;
+      fmw_runtime_set_alpha_focus(state, (fmw_alpha_focus_t)value);
       return 1;
     case FMW_RUNTIME_FIELD_ALPHA_MODIFY:
       if (index != 0u || value < 0.0f || value >= (float)FMW_RUNTIME_ALPHA_MODIFY_COUNT) return 0;

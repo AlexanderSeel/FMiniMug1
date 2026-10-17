@@ -28,7 +28,8 @@ typedef enum {
 
 typedef enum {
   FMW_ALPHA_FOCUS_PARAM = 0,
-  FMW_ALPHA_FOCUS_VALUE = 1
+  FMW_ALPHA_FOCUS_VALUE = 1,
+  FMW_ALPHA_FOCUS_TONE_MODIFY = 2
 } fmw_alpha_focus_t;
 
 typedef enum {
@@ -63,7 +64,7 @@ void fmw_runtime_toggle_play(fmw_runtime_t *state);
 void fmw_runtime_set_scene(fmw_runtime_t *state, uint8_t scene);
 void fmw_runtime_set_alpha_param(fmw_runtime_t *state, uint8_t param);
 void fmw_runtime_step_alpha_param(fmw_runtime_t *state, int delta);
-void fmw_runtime_toggle_alpha_focus(fmw_runtime_t *state);
+void fmw_runtime_set_alpha_focus(fmw_runtime_t *state, fmw_alpha_focus_t focus);
 void fmw_runtime_set_alpha_modify(fmw_runtime_t *state, uint8_t modify);
 void fmw_runtime_step_alpha_modify(fmw_runtime_t *state, int delta);
 void fmw_runtime_set_alpha_modify_amount(fmw_runtime_t *state, uint8_t modify, float amount);

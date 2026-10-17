@@ -63,9 +63,11 @@ int main(void) {
   assert(state.alpha_param == 0u);
   fmw_runtime_step_alpha_param(&state, -1);
   assert(state.alpha_param == 29u);
-  fmw_runtime_toggle_alpha_focus(&state);
+  fmw_runtime_set_alpha_focus(&state, FMW_ALPHA_FOCUS_VALUE);
   assert(state.alpha_focus == FMW_ALPHA_FOCUS_VALUE);
-  fmw_runtime_toggle_alpha_focus(&state);
+  fmw_runtime_set_alpha_focus(&state, FMW_ALPHA_FOCUS_TONE_MODIFY);
+  assert(state.alpha_focus == FMW_ALPHA_FOCUS_TONE_MODIFY);
+  fmw_runtime_set_alpha_focus(&state, FMW_ALPHA_FOCUS_PARAM);
   assert(state.alpha_focus == FMW_ALPHA_FOCUS_PARAM);
 
   fmw_runtime_set_alpha_modify(&state, FMW_ALPHA_MODIFY_ENV_TIME);
@@ -88,6 +90,7 @@ int main(void) {
   assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_CLOCK_SWING, 0u, 18.0f));
   assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_PARAM, 0u, 17.0f));
   assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u, 1.0f));
+  assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u, 2.0f));
   assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY, 0u, FMW_ALPHA_MODIFY_DEPTH));
   assert(fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_ALPHA_MODIFY_DEPTH, 0.625f));
   assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_SCENE, 0u), 3.0f));
@@ -99,10 +102,12 @@ int main(void) {
   assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_CLOCK_BPM, 0u), 128.0f));
   assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_CLOCK_SWING, 0u), 18.0f));
   assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_PARAM, 0u), 17.0f));
-  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u), 1.0f));
+  assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u), 2.0f));
   assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY, 0u), FMW_ALPHA_MODIFY_DEPTH));
   assert(nearf(fmw_runtime_get_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_ALPHA_MODIFY_DEPTH), 0.625f));
   assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_PARAM, 0u, FMW_RUNTIME_ALPHA_PARAM_COUNT));
+  assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u, 1.5f));
+  assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_FOCUS, 0u, 3.0f));
   assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_RUNTIME_ALPHA_MODIFY_COUNT, 0.5f));
   assert(!fmw_runtime_set_value(&state, (fmw_runtime_field_t)99, 0u, 0.0f));
 
