@@ -10,6 +10,11 @@ const forbidText=(text,needle,context)=>{if(text.includes(needle))fail(`${contex
 
 const main=read('web/src/main.tsx');
 const ui=read('web/src/FM1WorkstationNext.tsx');
+const workstation=read('web/src/audio/workstation.ts');
+const runtimeHeader=read('firmware/include/fm_workstation_runtime.h');
+const wasm=read('firmware/wasm/fm_workstation_wasm.c');
+const worklet=read('web/public/dsp/fminimug1-worklet.js');
+const wasmBuild=read('scripts/build_wasm.mjs');
 const manifest=JSON.parse(read('shared/workstation.json'));
 
 requireText(main,"FM1WorkstationNext",'main entry');
@@ -45,6 +50,24 @@ for(const token of [
   "workstation.stop()"
 ]) requireText(ui,token,'active virtual FM-1');
 
+for(const token of [
+  'fmw_runtime_set_value',
+  'fmw_runtime_get_value',
+  'FMW_RUNTIME_FIELD_ALPHA_PARAM',
+  'FMW_RUNTIME_FIELD_ALPHA_FOCUS',
+  'FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT'
+]) requireText(runtimeHeader,token,'native workstation runtime ABI');
+for(const token of ['fmw_wasm_runtime_set','fmw_wasm_runtime_get'])
+  requireText(wasm,token,'WASM runtime readback exports');
+for(const token of [
+  'WORKSTATION_RUNTIME_FIELD',
+  'getRuntimeValue'
+]) requireText(workstation,token,'workstation browser ABI');
+for(const token of ["m.type === 'runtimeSet'", "m.type === 'runtimeGet'", "type:'runtimeValue'"])
+  requireText(worklet,token,'worklet runtime messages');
+for(const token of ['-Wl,--export=fmw_wasm_runtime_set','-Wl,--export=fmw_wasm_runtime_get'])
+  requireText(wasmBuild,token,'WASM export list');
+
 const keyMatch=ui.match(/const COMPUTER_KEYS=\[([^\]]+)\]/);
 if(!keyMatch)fail('computer keyboard map missing');
 else{
@@ -59,4 +82,4 @@ for(const obsolete of [
 ]) forbidText(ui,obsolete,'physical left-control labels');
 
 if(process.exitCode)process.exit(process.exitCode);
-console.log('virtual-ui contract: PASS — one active FM-1 surface, 27-key input, Alpha Dial focus/Tone Modify and transport hooks present');
+console.log('virtual-ui contract: PASS — one FM-1 surface, 27-key input, Alpha Dial hooks and native runtime set/read ABI present');

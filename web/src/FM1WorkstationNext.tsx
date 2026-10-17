@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type PointerEvent as ReactPointerEvent} from 'react';
 import {WORKSTATION_GLOBAL_PAGES,WORKSTATION_PARTS,type WorkstationPartId} from './generated/workstation';
-import {workstation,type WorkstationMiniStep,type WorkstationScene} from './audio/workstation';
+import {workstation,WORKSTATION_RUNTIME_FIELD,type WorkstationMiniStep,type WorkstationScene} from './audio/workstation';
 import {BASS808_PARAM,type Bass808Pattern} from './audio/bass808';
 import {type Drum808Pattern,type Drum808VoiceId} from './audio/drum808';
 import {ALPHA_PARAM,type AlphaParamId,type AlphaPatch} from './audio/alpha';
@@ -101,6 +101,30 @@ export function FM1WorkstationNext(){
 
   useEffect(()=>workstation.onMeter(m=>{setPlayStep(m.step);setPeak(m.peak)}),[]);
   useEffect(()=>workstation.onError(error=>{setAudioState('error');setMessage(error)}),[]);
+  useEffect(()=>{
+    if(audioState!=='ready')return;
+    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaParam,0,alphaParamIndex);
+    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaFocus,0,alphaFocus==='value'?1:0);
+    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModify,0,modifyIndex);
+    modifyAmount.forEach((value,index)=>workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,index,value/8));
+  },[alphaFocus,alphaParamIndex,audioState,modifyAmount,modifyIndex]);
+  useEffect(()=>{
+    if(audioState!=='ready'||partId!=='alpha'||page.id!=='alpha'||globalPage!==null)return;
+    let active=true;
+    Promise.all([
+      workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaParam),
+      workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaFocus),
+      workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModify),
+      ...[0,1,2,3].map(index=>workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,index))
+    ]).then(([param,focus,modify,...amounts])=>{
+      if(!active)return;
+      setAlphaParamIndex(clamp(Math.round(param),0,ALPHA_DIAL_PARAMS.length-1));
+      setAlphaFocus(focus>=.5?'value':'param');
+      setModifyIndex(clamp(Math.round(modify),0,MODIFY_NAMES.length-1));
+      setModifyAmount(amounts.map(amount=>clamp(Math.round(amount*8),-8,8)) as [number,number,number,number]);
+    }).catch(error=>{if(active)setMessage(`Runtime readback failed: ${String(error)}`)});
+    return()=>{active=false};
+  },[audioState,globalPage,page.id,partId]);
 
   const pushSequence=useCallback((ml=miniLane,bp=bassPattern,dp=drumPattern,al=alphaLane,bpm=tempo,sw=swing)=>{
     const length=16;workstation.setSequenceMeta(length,bpm,sw);
@@ -158,7 +182,7 @@ export function FM1WorkstationNext(){
   useEffect(()=>{const down=(e:KeyboardEvent)=>{const target=e.target as HTMLElement|null;if(target?.matches('input,textarea,select,[contenteditable="true"]'))return;const i=COMPUTER_KEYS.indexOf(e.code);if(i<0||e.repeat)return;e.preventDefault();void triggerSource(`kbd:${e.code}`,53+i+octave*12,i)};const up=(e:KeyboardEvent)=>{if(activeRef.current.has(`kbd:${e.code}`)){e.preventDefault();releaseSource(`kbd:${e.code}`)}};window.addEventListener('keydown',down);window.addEventListener('keyup',up);return()=>{window.removeEventListener('keydown',down);window.removeEventListener('keyup',up)}},[octave,releaseSource,triggerSource]);
 
   const runtimeScene=():WorkstationScene=>({...scene,bpm:tempo,swing,bassPattern:{...bassPattern,bpm:tempo,swing},drumPattern:{...drumPattern,bpm:tempo,swing},bassPatch:{...scene.bassPatch,values:{...bassValues}},alphaPatch:{...scene.alphaPatch,values:{...alphaValues}}});
-  const loadScene=async(next:number)=>{const index=(next+WORKSTATION_SCENES.length)%WORKSTATION_SCENES.length,s=WORKSTATION_SCENES[index],bp=cloneBass(index),dp=cloneDrums(index),ml=createMiniLane(index),al=createAlphaLane(index),wasPlaying=playing;if(wasPlaying)workstation.stop();setSceneIndex(index);setTempo(s.bpm);setSwing(s.swing);setBassPattern(bp);setDrumPattern(dp);setMiniLane(ml);setAlphaLane(al);setBassValues({...initialValues(BASS),...s.bassPatch.values});setAlphaValues(v=>({...v,...s.alphaPatch.values}));setModifyAmount([0,0,0,0]);if(await ensureAudio()){await workstation.loadScene(s);pushSequence(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
+  const loadScene=async(next:number)=>{const index=(next+WORKSTATION_SCENES.length)%WORKSTATION_SCENES.length,s=WORKSTATION_SCENES[index],bp=cloneBass(index),dp=cloneDrums(index),ml=createMiniLane(index),al=createAlphaLane(index),wasPlaying=playing;if(wasPlaying)workstation.stop();setSceneIndex(index);setTempo(s.bpm);setSwing(s.swing);setBassPattern(bp);setDrumPattern(dp);setMiniLane(ml);setAlphaLane(al);setBassValues({...initialValues(BASS),...s.bassPatch.values});setAlphaValues(v=>({...v,...s.alphaPatch.values}));setModifyAmount([0,0,0,0]);if(await ensureAudio()){workstation.setSceneIndex(index);await workstation.loadScene(s);pushSequence(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
   const toggleTransport=async()=>{if(playing){workstation.stop();setPlaying(false);return}if(!await ensureAudio())return;await workstation.loadScene(runtimeScene());pushSequence();workstation.play();setPlaying(true)};
   const changePart=(next:WorkstationPartId)=>{for(const source of [...activeRef.current.keys()])releaseSource(source);setGlobalPage(null);setPartId(next)};
   const cyclePart=(delta=1)=>changePart(PARTS[(PARTS.indexOf(partId)+delta+PARTS.length)%PARTS.length]);

@@ -17,6 +17,7 @@ export type WorkstationMeter={peak:number;rms:number;step:number};
 export type WorkstationMiniStep={note:number;velocity:number;gate:number};
 export type WorkstationAlphaStep={notes:[number,number,number,number];velocity:number;gate:number};
 export type WorkstationFxParam=0|1|2;
+export const WORKSTATION_RUNTIME_FIELD={scene:0,playing:1,master:2,partLevel:3,fx:4,clockLength:5,clockBpm:6,clockSwing:7,alphaParam:8,alphaFocus:9,alphaModify:10,alphaModifyAmount:11} as const;
 export type WorkstationScene={
   name:string;
   bpm:number;
@@ -34,6 +35,8 @@ export class WorkstationEngine{
   private starting:Promise<void>|null=null;
   private listeners=new Set<(m:WorkstationMeter)=>void>();
   private errorListeners=new Set<(message:string)=>void>();
+  private runtimeRequestId=0;
+  private runtimeRequests=new Map<number,{resolve:(value:number)=>void;reject:(error:Error)=>void}>();
 
   onMeter(cb:(m:WorkstationMeter)=>void){this.listeners.add(cb);return()=>{this.listeners.delete(cb)}}
   onError(cb:(message:string)=>void){this.errorListeners.add(cb);return()=>{this.errorListeners.delete(cb)}}
@@ -63,6 +66,10 @@ export class WorkstationEngine{
       node.connect(output);
       node.port.onmessage=e=>{
         if(e.data?.type==='meter'&&e.data?.mode==='workstation')for(const cb of this.listeners)cb({peak:e.data.peak,rms:e.data.rms,step:e.data.step??0});
+        if(e.data?.type==='runtimeValue'&&Number.isInteger(e.data.requestId)){
+          const pending=this.runtimeRequests.get(e.data.requestId);
+          if(pending){this.runtimeRequests.delete(e.data.requestId);pending.resolve(Number(e.data.value))}
+        }
         if(e.data?.type==='error'){
           const message=String(e.data.message??'Unknown workstation worklet error');
           console.warn('FMiniMug1 workstation worklet:',message);
@@ -78,9 +85,20 @@ export class WorkstationEngine{
   }
 
   private send(message:unknown){this.node?.port.postMessage(message)}
-  setMaster(value:number){this.send({type:'level',part:4,value:Math.max(0,Math.min(1.2,value))})}
-  setPartLevel(part:0|1|2|3,value:number){this.send({type:'level',part,value})}
-  setFxParam(param:WorkstationFxParam,value:number){this.send({type:'fxParam',param,value})}
+  setRuntimeValue(field:number,index:number,value:number){this.send({type:'runtimeSet',field,index,value})}
+  getRuntimeValue(field:number,index=0):Promise<number>{
+    if(!this.node)return Promise.reject(new Error('Workstation audio is not started'));
+    const requestId=++this.runtimeRequestId;
+    return new Promise((resolve,reject)=>{
+      this.runtimeRequests.set(requestId,{resolve,reject});
+      this.send({type:'runtimeGet',requestId,field,index});
+      setTimeout(()=>{const pending=this.runtimeRequests.get(requestId);if(pending){this.runtimeRequests.delete(requestId);pending.reject(new Error('Workstation runtime readback timed out'))}},1000);
+    });
+  }
+  setMaster(value:number){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.master,0,Math.max(0,Math.min(1.2,value)))}
+  setPartLevel(part:0|1|2|3,value:number){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.partLevel,part,value)}
+  setFxParam(param:WorkstationFxParam,value:number){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.fx,param,value)}
+  setSceneIndex(scene:number){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.scene,0,Math.max(0,Math.min(255,Math.round(scene))))}
   setMiniParam(id:number,value:number){this.send({type:'miniParam',id,value})}
   miniNoteOn(note:number,velocity=110){this.send({type:'miniNoteOn',note,velocity})}
   miniNoteOff(note:number){this.send({type:'miniNoteOff',note})}
@@ -95,7 +113,9 @@ export class WorkstationEngine{
   alphaNoteOff(note:number){this.send({type:'alphaNoteOff',note})}
 
   setSequenceMeta(length:number,bpm:number,swing:number){
-    this.send({type:'seqMeta',length:Math.max(1,Math.min(64,Math.round(length))),bpm:Math.max(40,Math.min(300,Math.round(bpm))),swing:Math.max(0,Math.min(75,Math.round(swing)))})
+    this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.clockLength,0,Math.max(1,Math.min(64,Math.round(length))));
+    this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.clockBpm,0,Math.max(40,Math.min(300,Math.round(bpm))));
+    this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.clockSwing,0,Math.max(0,Math.min(75,Math.round(swing))));
   }
   setMiniStep(index:number,note:number,{velocity=100,gate=.9}:{velocity?:number;gate?:number}={}){
     this.send({type:'seqMiniStep',index,note,velocity:Math.max(1,Math.min(127,Math.round(velocity))),gate:Math.round(Math.max(.01,Math.min(4,gate))*100)})
@@ -122,8 +142,8 @@ export class WorkstationEngine{
       this.setDrumStep(i,d.hits,d.accent);
     }
   }
-  play(){this.send({type:'seqStart'})}
-  stop(){this.send({type:'seqStop'})}
+  play(){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.playing,0,1)}
+  stop(){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.playing,0,0)}
   reset(){this.send({type:'reset'})}
 }
 

@@ -63,7 +63,9 @@ Source of truth: `shared/workstation.json`.
 - [x] Virtual-UI contract CI rejects duplicate surfaces, broken 27-key maps and Alpha-Dial/transport hook drift.
 - [x] Compact PC-key hints displayed directly on the virtual 27-key bed without adding a second keyboard row.
 - [ ] Compile the actual native 240×240 renderer to WASM/canvas for pixel-identical preview.
-- [ ] Move remaining browser-only global state into shared/native C state.
+- [x] Mixer / master / FX / clock / transport / scene selection / ALPHA Dial selection, focus and Tone Modify amounts use a compact pointer-free native indexed set/read ABI.
+- [x] Virtual ALPHA Dial reads its parameter, focus, macro and macro amounts from the native runtime when the page becomes active.
+- [ ] Move remaining browser-owned patches, presets and sequencer data into shared/native C state.
 
 ## Milestone C — 808 DRUM engine 🚧
 
@@ -119,6 +121,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Alpha Dial PARAM/VALUE focus toggle via encoder press.
 - [x] TONE MODIFY macro mode on the main screen for BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME.
 - [x] Active Virtual-FM1 path exposes Alpha Dial focus, Tone Modify and preset navigation through real DSP parameters.
+- [x] Alpha Dial and Tone Modify selection/focus/amount state mirrors the portable native runtime and supports native readback.
 - [x] 8 original initial presets.
 - [x] 128 Alpha-Juno-style factory-bank positions/names mapped onto original modeled DSP patches (no Roland ROM/SysEx bundled).
 - [x] Real JieLi full-load image can link with six ALPHA voices + chorus and the other V2 engines.
@@ -128,6 +131,7 @@ Source of truth: `shared/workstation.json`.
 - [ ] Sustain pedal / richer chord memory.
 - [ ] Stereo/pan implementation after workstation mixer becomes stereo.
 - [ ] Real-device CPU measurement with six voices + chorus.
+- [ ] Move BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME transformations into portable C and test shared parameter deltas and bounds for hardware and virtual mode.
 
 ## Milestone F — Shared sequencer / song workflow 🚧
 
@@ -165,6 +169,7 @@ Source of truth: `shared/workstation.json`.
 - [ ] Four-part hardware mixer runtime.
 - [ ] Port resource-bounded FX into the mapped FM-1 hardware runtime after RAM/CPU budget validation.
 - [ ] Atomic scene recall at an audio-safe boundary.
+- [ ] Scene commit boundary must include selected scene, clock, levels, master, FX, four engine patches and sequence lanes; avoid bulk audio-state mutation from the UI thread.
 - [ ] 12+ full factory scenes.
 
 ## Milestone H — Web editor + WASM virtual FM-1 🚧
@@ -233,14 +238,14 @@ Source of truth: `shared/workstation.json`.
 - [x] Beta release manifest distinguishes `virtual_installer=true` from `hardware_installable=false`.
 - [x] Hardware diagnostic ZIP is checked to contain no `.fwsc` before prerelease publication.
 - [ ] Verify real button/encoder mapping on physical FM-1.
-- [ ] Run `fminimug1-workstation-stress.bin` on real hardware and record LAST / MAX / OVER.
+- [ ] Run `fminimug1-workstation-stress.bin` on real hardware and record CPU LAST / MAX / OVER; require `OVER=0` and set quality policy from measured headroom.
 - [ ] Define quality degradation policy if `OVER` is nonzero, never random underruns.
-- [ ] Build mapped four-part hardware runtime after control IDs and CPU budget are verified.
+- [ ] Build mapped four-part hardware runtime only after physical control IDs and CPU headroom are verified.
 - [ ] Port the four-lane workstation transport from the WASM integration layer into the mapped FM-1 runtime.
 - [ ] Read-only identity validation.
-- [ ] Validate stock V15 return/recovery path.
-- [ ] Only then create a mapped hardware beta.
-- [ ] Only after recovery validation consider `.fwsc` packaging and browser OTA installation.
+- [ ] Validate stock V15 return/recovery path on a real FM-1.
+- [ ] Only after physical controls, CPU `LAST / MAX / OVER`, identity and recovery gates pass, consider installable firmware.
+- [ ] Only then consider `.fwsc` packaging and browser OTA installation.
 
 ## Milestone K — Beta distribution 🚧
 
@@ -254,6 +259,7 @@ Source of truth: `shared/workstation.json`.
 - [x] GitHub prerelease creation is idempotent and tied to the exact verified commit SHA.
 - [x] Windows GitHub Actions smoke test installs the package, serves it on localhost, verifies COOP/COEP + WASM MIME and rejects a tampered package.
 - [x] `v0.3.0-beta.3` is the first release with the hardened checksum-verifying installer and verified Alpha-Dial/Tone-Modify workstation path.
+- [x] `v0.3.0-beta.4` adds the self-contained Windows virtual installer and install/upgrade/uninstall smoke verification.
 - [ ] Validate the packaged Windows installer manually on a clean Windows user profile outside CI.
 - [ ] Add signed/native desktop packaging later if the local-browser launcher proves useful enough.
 - [ ] Add FM-1 browser OTA installer only after the mapped firmware/recovery gates are complete.

@@ -33,6 +33,8 @@ class FMiniMug1Processor extends AudioWorkletProcessor {
       if (this.mode === 'workstation') {
         if (m.type === 'level') this.exports.fmw_wasm_set_level(m.part,m.value);
         else if (m.type === 'fxParam') this.exports.fmw_wasm_set_fx(m.param,m.value);
+        else if (m.type === 'runtimeSet') this.exports.fmw_wasm_runtime_set(m.field,m.index??0,m.value);
+        else if (m.type === 'runtimeGet') this.port.postMessage({type:'runtimeValue',requestId:m.requestId,value:this.exports.fmw_wasm_runtime_get(m.field,m.index??0)});
         else if (m.type === 'miniParam') this.exports.fmw_wasm_mini_param(m.id,m.value);
         else if (m.type === 'miniNoteOn') this.exports.fmw_wasm_mini_note_on(m.note,m.velocity??110);
         else if (m.type === 'miniNoteOff') this.exports.fmw_wasm_mini_note_off(m.note);
