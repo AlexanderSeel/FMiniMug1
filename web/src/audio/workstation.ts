@@ -17,7 +17,7 @@ export type WorkstationMeter={peak:number;rms:number;step:number};
 export type WorkstationMiniStep={note:number;velocity:number;gate:number};
 export type WorkstationAlphaStep={notes:[number,number,number,number];velocity:number;gate:number};
 export type WorkstationFxParam=0|1|2;
-export const WORKSTATION_RUNTIME_FIELD={scene:0,playing:1,master:2,partLevel:3,fx:4,clockLength:5,clockBpm:6,clockSwing:7,alphaParam:8,alphaFocus:9,alphaModify:10,alphaModifyAmount:11} as const;
+export const WORKSTATION_RUNTIME_FIELD={scene:0,playing:1,master:2,partLevel:3,fx:4,clockLength:5,clockBpm:6,clockSwing:7,alphaParam:8,alphaFocus:9,alphaModify:10,alphaModifyAmount:11,alphaPatchParam:12} as const;
 export type WorkstationScene={
   name:string;
   bpm:number;
@@ -94,6 +94,15 @@ export class WorkstationEngine{
       this.send({type:'runtimeGet',requestId,field,index});
       setTimeout(()=>{const pending=this.runtimeRequests.get(requestId);if(pending){this.runtimeRequests.delete(requestId);pending.reject(new Error('Workstation runtime readback timed out'))}},1000);
     });
+  }
+  async applyAlphaToneModify(delta:number,modify:number,params:readonly number[]):Promise<{values:number[];amount:number}>{
+    this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModify,0,modify);
+    this.send({type:'alphaToneModify',delta});
+    const [amount,...values]=await Promise.all([
+      this.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,modify),
+      ...params.map(id=>this.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaPatchParam,id))
+    ]);
+    return {amount,values};
   }
   setMaster(value:number){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.master,0,Math.max(0,Math.min(1.2,value)))}
   setPartLevel(part:0|1|2|3,value:number){this.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.partLevel,part,value)}

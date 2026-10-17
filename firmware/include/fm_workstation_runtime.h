@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "fm_workstation_seq.h"
 #include "fm_workstation_state.h"
+#include "fm_alpha.h"
 
 #define FMW_RUNTIME_PART_COUNT 4u
 #define FMW_RUNTIME_FX_COUNT 3u
@@ -21,7 +22,8 @@ typedef enum {
   FMW_RUNTIME_FIELD_ALPHA_PARAM = 8,
   FMW_RUNTIME_FIELD_ALPHA_FOCUS = 9,
   FMW_RUNTIME_FIELD_ALPHA_MODIFY = 10,
-  FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT = 11
+  FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT = 11,
+  FMW_RUNTIME_FIELD_ALPHA_PATCH_PARAM = 12
 } fmw_runtime_field_t;
 
 typedef enum {
@@ -67,3 +69,5 @@ void fmw_runtime_step_alpha_modify(fmw_runtime_t *state, int delta);
 void fmw_runtime_set_alpha_modify_amount(fmw_runtime_t *state, uint8_t modify, float amount);
 int fmw_runtime_set_value(fmw_runtime_t *state, fmw_runtime_field_t field, uint8_t index, float value);
 float fmw_runtime_get_value(const fmw_runtime_t *state, fmw_runtime_field_t field, uint8_t index);
+void fmw_runtime_apply_alpha_modify(fmw_runtime_t *state, fma_t *alpha, int delta);
+float fmw_runtime_get_alpha_param(const fma_t *alpha, uint8_t param);

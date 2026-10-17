@@ -156,25 +156,11 @@ export function FM1WorkstationNext(){
   const changeAlphaValue=(delta:number)=>{const current=alphaValues[alphaDial.id]??alphaDial.initial;let value=clamp(current+delta*alphaDial.step*(fine?.25:1),alphaDial.min,alphaDial.max);if(alphaDial.kind)value=Math.round(value);setAlphaParams({[alphaDial.id]:value})};
   const applyAlphaPreset=async(next:number)=>{const index=(next+ALPHA_ALL_PRESETS.length)%ALPHA_ALL_PRESETS.length,preset:AlphaPatch=ALPHA_ALL_PRESETS[index];setAlphaPresetIndex(index);setModifyAmount([0,0,0,0]);const values={...initialAlphaValues(),...preset.values};setAlphaValues(values);if(await ensureAudio())for(const [id,v] of Object.entries(values))workstation.setAlphaParam(+id as AlphaParamId,v)};
   const applyToneModify=(delta:number)=>{
-    const amounts=[...modifyAmount] as [number,number,number,number];amounts[modifyIndex]=clamp(amounts[modifyIndex]+delta,-8,8);setModifyAmount(amounts);
-    const patch:Record<number,number>={};
-    if(toneModify==='BRILLIANCE'){
-      patch[ALPHA_PARAM.cutoff]=clamp((alphaValues[ALPHA_PARAM.cutoff]??1800)+delta*280,45,12000);
-      patch[ALPHA_PARAM.hpf]=clamp((alphaValues[ALPHA_PARAM.hpf]??0)+delta*35,0,1600);
-      patch[ALPHA_PARAM.resonance]=clamp((alphaValues[ALPHA_PARAM.resonance]??.22)+delta*.012,0,.95);
-    }else if(toneModify==='MOD RATE'){
-      patch[ALPHA_PARAM.lfoRate]=clamp((alphaValues[ALPHA_PARAM.lfoRate]??.38)+delta*.10,.02,15);
-      patch[ALPHA_PARAM.pwmRate]=clamp((alphaValues[ALPHA_PARAM.pwmRate]??.30)+delta*.10,.02,12);
-    }else if(toneModify==='MOD DEPTH'){
-      patch[ALPHA_PARAM.dcoMod]=clamp((alphaValues[ALPHA_PARAM.dcoMod]??.06)+delta*.02,0,2);
-      patch[ALPHA_PARAM.vcfMod]=clamp((alphaValues[ALPHA_PARAM.vcfMod]??120)+delta*30,0,2000);
-      patch[ALPHA_PARAM.pwmDepth]=clamp((alphaValues[ALPHA_PARAM.pwmDepth]??.12)+delta*.015,0,.4);
-    }else{
-      patch[ALPHA_PARAM.attack]=clamp((alphaValues[ALPHA_PARAM.attack]??.018)+delta*.025,.001,4);
-      patch[ALPHA_PARAM.decay]=clamp((alphaValues[ALPHA_PARAM.decay]??.42)+delta*.05,.01,5);
-      patch[ALPHA_PARAM.release]=clamp((alphaValues[ALPHA_PARAM.release]??.48)+delta*.06,.01,6);
-    }
-    setAlphaParams(patch);
+    const params=toneModify==='BRILLIANCE'?[ALPHA_PARAM.cutoff,ALPHA_PARAM.hpf,ALPHA_PARAM.resonance]:toneModify==='MOD RATE'?[ALPHA_PARAM.lfoRate,ALPHA_PARAM.pwmRate]:toneModify==='MOD DEPTH'?[ALPHA_PARAM.dcoMod,ALPHA_PARAM.vcfMod,ALPHA_PARAM.pwmDepth]:[ALPHA_PARAM.attack,ALPHA_PARAM.decay,ALPHA_PARAM.release];
+    void workstation.applyAlphaToneModify(delta,modifyIndex,params).then(({amount,values})=>{
+      setAlphaValues(current=>({...current,...Object.fromEntries(params.map((id,index)=>[id,values[index]]))}));
+      setModifyAmount(current=>{const next=[...current] as [number,number,number,number];next[modifyIndex]=clamp(Math.round(amount*8),-8,8);return next});
+    }).catch(error=>setMessage(`Tone Modify failed: ${String(error)}`));
   };
 
   const releaseSource=useCallback((source:string)=>{const entry=activeRef.current.get(source);if(!entry)return;activeRef.current.delete(source);if(entry.part==='mini')workstation.miniNoteOff(entry.note);else if(entry.part==='alpha')workstation.alphaNoteOff(entry.note);else if(entry.part==='bass808'){const remaining=[...activeRef.current.values()].filter(v=>v.part==='bass808');if(remaining.length)workstation.bassNoteOn(remaining.at(-1)!.note);else workstation.bassNoteOff()}setHeld([...new Set([...activeRef.current.values()].map(v=>v.note))])},[]);

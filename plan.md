@@ -63,7 +63,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Virtual-UI contract CI rejects duplicate surfaces, broken 27-key maps and Alpha-Dial/transport hook drift.
 - [x] Compact PC-key hints displayed directly on the virtual 27-key bed without adding a second keyboard row.
 - [ ] Compile the actual native 240×240 renderer to WASM/canvas for pixel-identical preview.
-- [x] Mixer / master / FX / clock / transport / scene selection / ALPHA Dial selection, focus and Tone Modify amounts use a compact pointer-free native indexed set/read ABI.
+- [x] Mixer / master / FX / clock / transport / scene selection / ALPHA Dial selection, focus, Tone Modify amounts and Alpha patch readback use a compact pointer-free native indexed ABI.
 - [x] Virtual ALPHA Dial reads its parameter, focus, macro and macro amounts from the native runtime when the page becomes active.
 - [ ] Move remaining browser-owned patches, presets and sequencer data into shared/native C state.
 
@@ -122,6 +122,7 @@ Source of truth: `shared/workstation.json`.
 - [x] TONE MODIFY macro mode on the main screen for BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME.
 - [x] Active Virtual-FM1 path exposes Alpha Dial focus, Tone Modify and preset navigation through real DSP parameters.
 - [x] Alpha Dial and Tone Modify selection/focus/amount state mirrors the portable native runtime and supports native readback.
+- [x] BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME transformations execute in portable C; virtual mode reads the affected parameters and macro amount back from native state.
 - [x] 8 original initial presets.
 - [x] 128 Alpha-Juno-style factory-bank positions/names mapped onto original modeled DSP patches (no Roland ROM/SysEx bundled).
 - [x] Real JieLi full-load image can link with six ALPHA voices + chorus and the other V2 engines.
@@ -131,7 +132,6 @@ Source of truth: `shared/workstation.json`.
 - [ ] Sustain pedal / richer chord memory.
 - [ ] Stereo/pan implementation after workstation mixer becomes stereo.
 - [ ] Real-device CPU measurement with six voices + chorus.
-- [ ] Move BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME transformations into portable C and test shared parameter deltas and bounds for hardware and virtual mode.
 
 ## Milestone F — Shared sequencer / song workflow 🚧
 

@@ -149,7 +149,7 @@ __attribute__((visibility("default"))) void fmw_wasm_set_fx(int param, float val
 }
 __attribute__((visibility("default"))) int fmw_wasm_runtime_set(int field, int index, float value) {
   ensure_init();
-  if (field < (int)FMW_RUNTIME_FIELD_SCENE || field > (int)FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT || index < 0 || index > 255) return 0;
+  if (field < (int)FMW_RUNTIME_FIELD_SCENE || field > (int)FMW_RUNTIME_FIELD_ALPHA_PATCH_PARAM || index < 0 || index > 255) return 0;
   const uint8_t was_playing = runtime_state.playing;
   if (!fmw_runtime_set_value(&runtime_state, (fmw_runtime_field_t)field, (uint8_t)index, value)) return 0;
   if (field == (int)FMW_RUNTIME_FIELD_FX) {
@@ -169,8 +169,13 @@ __attribute__((visibility("default"))) int fmw_wasm_runtime_set(int field, int i
 }
 __attribute__((visibility("default"))) float fmw_wasm_runtime_get(int field, int index) {
   ensure_init();
-  if (field < (int)FMW_RUNTIME_FIELD_SCENE || field > (int)FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT || index < 0 || index > 255) return 0.0f;
+  if (field < (int)FMW_RUNTIME_FIELD_SCENE || field > (int)FMW_RUNTIME_FIELD_ALPHA_PATCH_PARAM || index < 0 || index > 255) return 0.0f;
+  if (field == (int)FMW_RUNTIME_FIELD_ALPHA_PATCH_PARAM) return fmw_runtime_get_alpha_param(&alpha, (uint8_t)index);
   return fmw_runtime_get_value(&runtime_state, (fmw_runtime_field_t)field, (uint8_t)index);
+}
+__attribute__((visibility("default"))) void fmw_wasm_alpha_tone_modify(int delta) {
+  ensure_init();
+  fmw_runtime_apply_alpha_modify(&runtime_state, &alpha, delta);
 }
 __attribute__((visibility("default"))) void fmw_wasm_mini_param(int id, float value) { ensure_init(); fmm_set_param(id, value); }
 __attribute__((visibility("default"))) void fmw_wasm_mini_note_on(int note, int velocity) { ensure_init(); fmm_note_on(note, velocity); }

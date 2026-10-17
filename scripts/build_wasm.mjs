@@ -148,6 +148,7 @@ const args=[
   '-Wl,--export=fmw_wasm_set_fx',
   '-Wl,--export=fmw_wasm_runtime_set',
   '-Wl,--export=fmw_wasm_runtime_get',
+  '-Wl,--export=fmw_wasm_alpha_tone_modify',
   '-Wl,--export=fmw_wasm_mini_param',
   '-Wl,--export=fmw_wasm_mini_note_on',
   '-Wl,--export=fmw_wasm_mini_note_off',

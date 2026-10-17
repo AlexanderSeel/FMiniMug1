@@ -15,6 +15,7 @@ const runtimeHeader=read('firmware/include/fm_workstation_runtime.h');
 const wasm=read('firmware/wasm/fm_workstation_wasm.c');
 const worklet=read('web/public/dsp/fminimug1-worklet.js');
 const wasmBuild=read('scripts/build_wasm.mjs');
+const shellWasmBuild=read('scripts/build_wasm.sh');
 const manifest=JSON.parse(read('shared/workstation.json'));
 
 requireText(main,"FM1WorkstationNext",'main entry');
@@ -55,18 +56,26 @@ for(const token of [
   'fmw_runtime_get_value',
   'FMW_RUNTIME_FIELD_ALPHA_PARAM',
   'FMW_RUNTIME_FIELD_ALPHA_FOCUS',
-  'FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT'
+  'FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT',
+  'FMW_RUNTIME_FIELD_ALPHA_PATCH_PARAM',
+  'fmw_runtime_apply_alpha_modify',
+  'fmw_runtime_get_alpha_param'
 ]) requireText(runtimeHeader,token,'native workstation runtime ABI');
-for(const token of ['fmw_wasm_runtime_set','fmw_wasm_runtime_get'])
+for(const token of ['fmw_wasm_runtime_set','fmw_wasm_runtime_get','fmw_wasm_alpha_tone_modify'])
   requireText(wasm,token,'WASM runtime readback exports');
 for(const token of [
   'WORKSTATION_RUNTIME_FIELD',
-  'getRuntimeValue'
+  'getRuntimeValue',
+  'applyAlphaToneModify'
 ]) requireText(workstation,token,'workstation browser ABI');
-for(const token of ["m.type === 'runtimeSet'", "m.type === 'runtimeGet'", "type:'runtimeValue'"])
+for(const token of ["m.type === 'runtimeSet'", "m.type === 'runtimeGet'", "m.type === 'alphaToneModify'", "type:'runtimeValue'"])
   requireText(worklet,token,'worklet runtime messages');
 for(const token of ['-Wl,--export=fmw_wasm_runtime_set','-Wl,--export=fmw_wasm_runtime_get'])
   requireText(wasmBuild,token,'WASM export list');
+requireText(wasmBuild,'-Wl,--export=fmw_wasm_alpha_tone_modify','WASM export list');
+requireText(shellWasmBuild,'-Wl,--export=fmw_wasm_alpha_tone_modify','shell WASM export list');
+for(const token of ['delta*280','delta*.10','delta*.02','delta*.025'])
+  forbidText(ui,token,'Tone Modify transforms must live in portable C');
 
 const keyMatch=ui.match(/const COMPUTER_KEYS=\[([^\]]+)\]/);
 if(!keyMatch)fail('computer keyboard map missing');

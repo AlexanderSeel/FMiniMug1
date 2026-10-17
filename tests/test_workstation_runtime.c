@@ -106,6 +106,40 @@ int main(void) {
   assert(!fmw_runtime_set_value(&state, FMW_RUNTIME_FIELD_ALPHA_MODIFY_AMOUNT, FMW_RUNTIME_ALPHA_MODIFY_COUNT, 0.5f));
   assert(!fmw_runtime_set_value(&state, (fmw_runtime_field_t)99, 0u, 0.0f));
 
+  fma_t alpha = {0};
+  alpha.patch.cutoff_hz = 1000.0f; alpha.patch.hpf_cutoff_hz = 100.0f; alpha.patch.resonance = 0.5f;
+  fmw_runtime_set_alpha_modify(&state, FMW_ALPHA_MODIFY_BRILLIANCE);
+  fmw_runtime_apply_alpha_modify(&state, &alpha, 1);
+  assert(nearf(alpha.patch.cutoff_hz, 1280.0f));
+  assert(nearf(alpha.patch.hpf_cutoff_hz, 135.0f));
+  assert(nearf(alpha.patch.resonance, 0.512f));
+  assert(nearf(state.alpha_modify_amount[FMW_ALPHA_MODIFY_BRILLIANCE], 0.125f));
+  assert(nearf(fmw_runtime_get_alpha_param(&alpha, 4u), 1280.0f));
+  alpha.patch.cutoff_hz = 11900.0f; alpha.patch.hpf_cutoff_hz = 1590.0f; alpha.patch.resonance = 0.94f;
+  fmw_runtime_apply_alpha_modify(&state, &alpha, 4);
+  assert(nearf(alpha.patch.cutoff_hz, 12000.0f));
+  assert(nearf(alpha.patch.hpf_cutoff_hz, 1600.0f));
+  assert(nearf(alpha.patch.resonance, 0.95f));
+  assert(nearf(state.alpha_modify_amount[FMW_ALPHA_MODIFY_BRILLIANCE], 0.625f));
+
+  alpha.patch.lfo_rate_hz = 0.38f; alpha.patch.pwm_rate_hz = 0.3f;
+  fmw_runtime_set_alpha_modify(&state, FMW_ALPHA_MODIFY_RATE);
+  fmw_runtime_apply_alpha_modify(&state, &alpha, 1);
+  assert(nearf(alpha.patch.lfo_rate_hz, 0.48f));
+  assert(nearf(alpha.patch.pwm_rate_hz, 0.4f));
+  alpha.patch.lfo_dco_amount = 0.06f; alpha.patch.lfo_vcf_amount_hz = 120.0f; alpha.patch.pwm_depth = 0.12f;
+  fmw_runtime_set_alpha_modify(&state, FMW_ALPHA_MODIFY_DEPTH);
+  fmw_runtime_apply_alpha_modify(&state, &alpha, 1);
+  assert(nearf(alpha.patch.lfo_dco_amount, 0.08f));
+  assert(nearf(alpha.patch.lfo_vcf_amount_hz, 150.0f));
+  assert(nearf(alpha.patch.pwm_depth, 0.135f));
+  alpha.patch.attack_s = 0.018f; alpha.patch.decay_s = 0.42f; alpha.patch.release_s = 0.48f;
+  fmw_runtime_set_alpha_modify(&state, FMW_ALPHA_MODIFY_ENV_TIME);
+  fmw_runtime_apply_alpha_modify(&state, &alpha, 1);
+  assert(nearf(alpha.patch.attack_s, 0.043f));
+  assert(nearf(alpha.patch.decay_s, 0.47f));
+  assert(nearf(alpha.patch.release_s, 0.54f));
+
   puts("workstation runtime state and indexed ABI tests passed");
   return 0;
 }
