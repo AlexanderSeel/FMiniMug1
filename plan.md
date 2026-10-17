@@ -64,7 +64,8 @@ Source of truth: `shared/workstation.json`.
 - [x] Compact PC-key hints displayed directly on the virtual 27-key bed without adding a second keyboard row.
 - [ ] Compile the actual native 240×240 renderer to WASM/canvas for pixel-identical preview.
 - [x] Mixer / master / FX / clock / transport / scene selection / ALPHA Dial selection, focus, Tone Modify amounts and Alpha patch readback use a compact pointer-free native indexed ABI.
-- [x] Virtual ALPHA Dial reads its parameter, focus, macro and macro amounts from the native runtime when the page becomes active.
+- [x] Alpha Juno main screen uses explicit PARAMETER SELECT, VALUE, MOD RATE, MOD DEPTH, BRILLIANCE and ENV TIME buttons; turning ALPHA DIAL performs the selected action.
+- [x] Virtual ALPHA Dial reads its parameter, three-state focus, macro and macro amounts from the native runtime when the page becomes active.
 - [ ] Move remaining browser-owned patches, presets and sequencer data into shared/native C state.
 
 ## Milestone C — 808 DRUM engine 🚧
@@ -117,9 +118,9 @@ Source of truth: `shared/workstation.json`.
 - [x] Six-key polyphonic virtual hardware test through the unified workstation instance.
 - [x] Native PWM / pulse width / PWM rate-depth.
 - [x] Native HPF, DCO range and DCO envelope pitch modulation.
-- [x] Dedicated ALPHA DIAL main page on KNOB1 with parameter navigation and live value editing.
-- [x] Alpha Dial PARAM/VALUE focus toggle via encoder press.
-- [x] TONE MODIFY macro mode on the main screen for BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME.
+- [x] Dedicated ALPHA DIAL main page with parameter navigation and live value editing.
+- [x] Alpha Juno PARAMETER SELECT and VALUE modes are explicitly selected; ALPHA DIAL clicks and unrelated encoders no longer change modes.
+- [x] Four direct Tone Modify mode buttons match the Alpha Juno control names and order: MOD RATE / MOD DEPTH / BRILLIANCE / ENV TIME.
 - [x] Active Virtual-FM1 path exposes Alpha Dial focus, Tone Modify and preset navigation through real DSP parameters.
 - [x] Alpha Dial and Tone Modify selection/focus/amount state mirrors the portable native runtime and supports native readback.
 - [x] BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME transformations execute in portable C; virtual mode reads the affected parameters and macro amount back from native state.

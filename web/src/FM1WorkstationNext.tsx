@@ -14,7 +14,7 @@ type Binding={id:number;label:string;min:number;max:number;step:number;initial:n
 type DrumVoiceState={level:number;tune:number;decay:number;tone:number};
 type AlphaLaneStep={chord:number;gate:number;velocity:number};
 type ActiveNote={note:number;part:WorkstationPartId};
-type AlphaFocus='param'|'value';
+type AlphaFocus='param'|'value'|'modify';
 type ToneModify='BRILLIANCE'|'MOD RATE'|'MOD DEPTH'|'ENV TIME';
 
 const PARTS:WorkstationPartId[]=['mini','drum808','bass808','alpha'];
@@ -22,7 +22,9 @@ const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const DRUM_SHORT=['BD','SD','CH','OH','CP','TM','CB','RS'];
 const COMPUTER_KEYS=['KeyZ','KeyS','KeyX','KeyD','KeyC','KeyV','KeyG','KeyB','KeyH','KeyN','KeyJ','KeyM','Comma','KeyL','Period','Semicolon','Slash','KeyQ','Digit2','KeyW','Digit3','KeyE','KeyR','Digit5','KeyT','Digit6','KeyY'];
 const ALPHA_CHORDS:[[number,number,number,number],[number,number,number,number],[number,number,number,number],[number,number,number,number],[number,number,number,number]]=[[48,55,60,64],[45,52,57,60],[50,57,62,65],[43,50,55,59],[48,52,55,60]];
-const MODIFY_NAMES:ToneModify[]=['BRILLIANCE','MOD RATE','MOD DEPTH','ENV TIME'];
+const MODIFY_NAMES:ToneModify[]=['MOD RATE','MOD DEPTH','BRILLIANCE','ENV TIME'];
+const MODIFY_RUNTIME_INDEX=[1,2,0,3] as const;
+const FOCUS_RUNTIME_VALUE:Record<AlphaFocus,number>={param:0,value:1,modify:2};
 
 const b=(id:number,label:string,min:number,max:number,step:number,initial:number,extra:Partial<Binding>={}):Binding=>({id,label,min,max,step,initial,...extra});
 const MINI:Record<string,(Binding|null)[]>={
@@ -149,9 +151,9 @@ export function FM1WorkstationNext(){
   useEffect(()=>{
     if(audioState!=='ready')return;
     workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaParam,0,alphaParamIndex);
-    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaFocus,0,alphaFocus==='value'?1:0);
-    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModify,0,modifyIndex);
-    modifyAmount.forEach((value,index)=>workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,index,value/8));
+    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaFocus,0,FOCUS_RUNTIME_VALUE[alphaFocus]);
+    workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModify,0,MODIFY_RUNTIME_INDEX[modifyIndex]);
+    modifyAmount.forEach((value,index)=>workstation.setRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,MODIFY_RUNTIME_INDEX[index],value/8));
   },[alphaFocus,alphaParamIndex,audioState,modifyAmount,modifyIndex]);
   useEffect(()=>{
     if(audioState!=='ready'||partId!=='alpha'||page.id!=='alpha'||globalPage!==null)return;
@@ -160,12 +162,12 @@ export function FM1WorkstationNext(){
       workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaParam),
       workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaFocus),
       workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModify),
-      ...[0,1,2,3].map(index=>workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,index))
+      ...MODIFY_RUNTIME_INDEX.map(index=>workstation.getRuntimeValue(WORKSTATION_RUNTIME_FIELD.alphaModifyAmount,index))
     ]).then(([param,focus,modify,...amounts])=>{
       if(!active)return;
       setAlphaParamIndex(clamp(Math.round(param),0,ALPHA_DIAL_PARAMS.length-1));
-      setAlphaFocus(focus>=.5?'value':'param');
-      setModifyIndex(clamp(Math.round(modify),0,MODIFY_NAMES.length-1));
+      setAlphaFocus(focus>=1.5?'modify':focus>=.5?'value':'param');
+      setModifyIndex(Math.max(0,MODIFY_RUNTIME_INDEX.findIndex(value=>value===clamp(Math.round(modify),0,3))));
       setModifyAmount(amounts.map(amount=>clamp(Math.round(amount*8),-8,8)) as [number,number,number,number]);
     }).catch(error=>{if(active)setMessage(`Runtime readback failed: ${String(error)}`)});
     return()=>{active=false};
@@ -202,7 +204,7 @@ export function FM1WorkstationNext(){
   const applyAlphaPreset=async(next:number)=>{const index=(next+ALPHA_ALL_PRESETS.length)%ALPHA_ALL_PRESETS.length,preset:AlphaPatch=ALPHA_ALL_PRESETS[index];setAlphaPresetIndex(index);setModifyAmount([0,0,0,0]);const values={...initialAlphaValues(),...preset.values};setAlphaValues(values);if(await ensureAudio())for(const [id,v] of Object.entries(values))workstation.setAlphaParam(+id as AlphaParamId,v)};
   const applyToneModify=(delta:number)=>{
     const params=toneModify==='BRILLIANCE'?[ALPHA_PARAM.cutoff,ALPHA_PARAM.hpf,ALPHA_PARAM.resonance]:toneModify==='MOD RATE'?[ALPHA_PARAM.lfoRate,ALPHA_PARAM.pwmRate]:toneModify==='MOD DEPTH'?[ALPHA_PARAM.dcoMod,ALPHA_PARAM.vcfMod,ALPHA_PARAM.pwmDepth]:[ALPHA_PARAM.attack,ALPHA_PARAM.decay,ALPHA_PARAM.release];
-    void workstation.applyAlphaToneModify(delta,modifyIndex,params).then(({amount,values})=>{
+    void workstation.applyAlphaToneModify(delta,MODIFY_RUNTIME_INDEX[modifyIndex],params).then(({amount,values})=>{
       setAlphaValues(current=>({...current,...Object.fromEntries(params.map((id,index)=>[id,values[index]]))}));
       setModifyAmount(current=>{const next=[...current] as [number,number,number,number];next[modifyIndex]=clamp(Math.round(amount*8),-8,8);return next});
     }).catch(error=>setMessage(`Tone Modify failed: ${String(error)}`));
@@ -228,10 +230,11 @@ export function FM1WorkstationNext(){
     if(!await ensureAudio())return;const scale=fine?.25:1;
     if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer'){const next=[...partLevels] as [number,number,number,number];next[index]=clamp(next[index]+delta*.04*scale,0,1.25);setPartLevels(next);workstation.setPartLevel(index as 0|1|2|3,index===1&&drumMuted?0:next[index])}else if(id==='scene'&&index===0)void loadScene(sceneIndex+delta);else if(id==='clock'&&index===0){const n=clamp(tempo+delta,40,300);setTempo(n);workstation.setSequenceMeta(16,n,swing)}else if(id==='clock'&&index===1){const n=clamp(swing+delta,0,75);setSwing(n);workstation.setSequenceMeta(16,tempo,n)}else if(id==='fx'){if(index===0){const n=clamp(delayMix+delta*.04*scale,0,.8);setDelayMix(n);workstation.setFxParam(0,n)}else if(index===1){const n=clamp(ambienceMix+delta*.04*scale,0,.8);setAmbienceMix(n);workstation.setFxParam(1,n)}else if(index===2){const n=clamp(masterDrive+delta*.08*scale,.5,3);setMasterDrive(n);workstation.setFxParam(2,n)}else{const n=clamp(master+delta*.04*scale,0,1.2);setMaster(n);workstation.setMaster(n)}}return}
     if(partId==='alpha'&&page.id==='alpha'){
-      if(index===0){if(alphaFocus==='param')setAlphaParamIndex(v=>(v+delta+ALPHA_DIAL_PARAMS.length)%ALPHA_DIAL_PARAMS.length);else changeAlphaValue(delta)}
-      else if(index===1)setAlphaFocus(delta>0?'value':'param');
-      else if(index===2)void applyAlphaPreset(alphaPresetIndex+delta);
-      else applyToneModify(delta);
+      if(index===0){
+        if(alphaFocus==='param')setAlphaParamIndex(v=>(v+delta+ALPHA_DIAL_PARAMS.length)%ALPHA_DIAL_PARAMS.length);
+        else if(alphaFocus==='value')changeAlphaValue(delta);
+        else applyToneModify(delta);
+      }else if(index===1)void applyAlphaPreset(alphaPresetIndex+delta);
       return;
     }
     if(page.id==='seq'){
@@ -263,19 +266,20 @@ export function FM1WorkstationNext(){
 
   const controlValue=(index:number)=>{
     if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer')return partLevels[index].toFixed(2);if(id==='fx')return [`${Math.round(delayMix*100)}%`,`${Math.round(ambienceMix*100)}%`,`${masterDrive.toFixed(2)}x`,`${Math.round(master*100)}%`][index]??'—';if(id==='clock')return [tempo,swing,'INT','ON'][index]?.toString()??'—';if(id==='scene')return index===0?scene.name:index===2?'PRESS':index===3?'PRESS':'—'}
-    if(partId==='alpha'&&page.id==='alpha')return [alphaFocus==='param'?alphaDial.label:pretty(alphaDial,alphaValues[alphaDial.id]),alphaFocus.toUpperCase(),alphaPreset.name,`${toneModify} ${modifyAmount[modifyIndex]>=0?'+':''}${modifyAmount[modifyIndex]}`][index]??'—';
+    if(partId==='alpha'&&page.id==='alpha')return [alphaFocus==='param'?alphaDial.label:alphaFocus==='value'?pretty(alphaDial,alphaValues[alphaDial.id]):`${toneModify} ${modifyAmount[modifyIndex]>=0?'+':''}${modifyAmount[modifyIndex]}`,alphaPreset.name,'—','—'][index]??'—';
     if(page.id==='seq'){if(partId==='mini')return [seqCursor+1,noteName(miniStep.note),`${Math.round(miniStep.gate*100)}%`,playing?'STOP':'PLAY'][index]?.toString()??'—';if(partId==='alpha')return [seqCursor+1,alphaStep.chord<0?'REST':`CH${alphaStep.chord+1}`,`${Math.round(alphaStep.gate*100)}%`,playing?'STOP':'PLAY'][index]?.toString()??'—';if(partId==='bass808')return [seqCursor+1,noteName(bassStep.note),bassStep.accent?'ON':'OFF',bassStep.slide?'ON':'OFF'][index]?.toString()??'—';const mask=1<<drumVoice;return [seqCursor+1,(drumStep.hits&mask)?'ON':'OFF',(drumStep.accent&mask)?'ON':'OFF',DRUM_SHORT[drumVoice]][index]?.toString()??'—'}
     if(partId==='drum808'){if(page.id==='kit')return [DRUM_SHORT[drumVoice],currentDrum.level.toFixed(2),`${Math.round(currentDrum.tune)} Hz`,`${currentDrum.decay.toFixed(2)} s`][index];if(page.id==='tone')return [currentDrum.tone.toFixed(2),drumAccent.toFixed(2),drumDrive.toFixed(2),'HIT'][index];if(page.id==='mix'){const ids=[[0],[1],[2,3],[4,5,6,7]][index];return (ids.reduce((sum,id)=>sum+drumKit[id].level,0)/ids.length).toFixed(2)}if(page.id==='perf')return [swing,'FILL',drumMuted?'MUTED':'ON',sceneIndex+1][index]?.toString()??'—'}
     if(partId==='bass808'){if(page.id==='perf')return [tempo,swing,sceneIndex+1,playing?'STOP':'PLAY'][index]?.toString()??'—';if(page.id==='env'&&index===2)return `${Math.round((bassStep.gate??.72)*100)}%`}
     const item=bindingPage?.[index]??null;return pretty(item,item?bindingValues[item.id]:undefined)
   };
-  const controlRatio=(index:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer')return partLevels[index]/1.25;if(id==='fx')return [delayMix/.8,ambienceMix/.8,(masterDrive-.5)/2.5,master/1.2][index]??.5;if(id==='clock')return index===0?(tempo-40)/260:index===1?swing/75:.5;if(id==='scene'&&index===0)return sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1);return .5}if(partId==='alpha'&&page.id==='alpha')return [alphaFocus==='param'?alphaParamIndex/(ALPHA_DIAL_PARAMS.length-1):ratio(alphaDial,alphaValues[alphaDial.id]),alphaFocus==='value'?1:0,alphaPresetIndex/(ALPHA_ALL_PRESETS.length-1),(modifyAmount[modifyIndex]+8)/16][index]??.5;if(page.id==='seq')return index===0?seqCursor/15:index===3?(playing?1:0):.5;if(partId==='drum808'){if(page.id==='kit')return [drumVoice/7,currentDrum.level/1.2,Math.min(1,currentDrum.tune/14000),Math.min(1,currentDrum.decay/2)][index];if(page.id==='tone')return [currentDrum.tone,drumAccent/1.5,(drumDrive-.5)/3.5,.5][index];if(page.id==='perf')return [swing/75,.5,drumMuted?1:0,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1)][index]}if(partId==='bass808'&&page.id==='perf')return [(tempo-40)/260,swing/75,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1),playing?1:0][index];const item=bindingPage?.[index]??null;return ratio(item,item?bindingValues[item.id]:undefined)};
-  const available=(index:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;return id==='mixer'||id==='fx'||(id==='scene'&&(index===0||index===2||index===3))||(id==='clock'&&(index===0||index===1))}if(partId==='alpha'&&page.id==='alpha')return true;if(partId==='drum808')return true;if(page.id==='seq')return true;if(partId==='bass808'&&(page.id==='perf'||(page.id==='env'&&index===2)))return true;return !!bindingPage?.[index]};
-  const pressControl=(index:number)=>{if(globalPage!==null&&WORKSTATION_GLOBAL_PAGES[globalPage].id==='scene'){if(index===2)saveSnapshot();else if(index===3)loadSnapshot();return}if(partId==='alpha'&&page.id==='alpha'){if(index===0||index===1)setAlphaFocus(v=>v==='param'?'value':'param');else if(index===3)setModifyIndex(v=>(v+1)%MODIFY_NAMES.length);return}const label=visiblePage.params[index];if(label==='PLAY')void toggleTransport();else if(label==='TRIGGER')workstation.triggerDrum(drumVoice as Drum808VoiceId,110,true);else if(label==='FILL')[0,1,2].forEach(v=>workstation.triggerDrum(v as Drum808VoiceId,108,true));else if(label==='HIT'||label==='ACCENT'||label==='SLIDE')void adjust(index,1)};
+  const controlRatio=(index:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;if(id==='mixer')return partLevels[index]/1.25;if(id==='fx')return [delayMix/.8,ambienceMix/.8,(masterDrive-.5)/2.5,master/1.2][index]??.5;if(id==='clock')return index===0?(tempo-40)/260:index===1?swing/75:.5;if(id==='scene'&&index===0)return sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1);return .5}if(partId==='alpha'&&page.id==='alpha')return [alphaFocus==='param'?alphaParamIndex/(ALPHA_DIAL_PARAMS.length-1):alphaFocus==='value'?ratio(alphaDial,alphaValues[alphaDial.id]):(modifyAmount[modifyIndex]+8)/16,alphaPresetIndex/(ALPHA_ALL_PRESETS.length-1),.5,.5][index]??.5;if(page.id==='seq')return index===0?seqCursor/15:index===3?(playing?1:0):.5;if(partId==='drum808'){if(page.id==='kit')return [drumVoice/7,currentDrum.level/1.2,Math.min(1,currentDrum.tune/14000),Math.min(1,currentDrum.decay/2)][index];if(page.id==='tone')return [currentDrum.tone,drumAccent/1.5,(drumDrive-.5)/3.5,.5][index];if(page.id==='perf')return [swing/75,.5,drumMuted?1:0,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1)][index]}if(partId==='bass808'&&page.id==='perf')return [(tempo-40)/260,swing/75,sceneIndex/Math.max(1,WORKSTATION_SCENES.length-1),playing?1:0][index];const item=bindingPage?.[index]??null;return ratio(item,item?bindingValues[item.id]:undefined)};
+  const available=(index:number)=>{if(globalPage!==null){const id=WORKSTATION_GLOBAL_PAGES[globalPage].id;return id==='mixer'||id==='fx'||(id==='scene'&&(index===0||index===2||index===3))||(id==='clock'&&(index===0||index===1))}if(partId==='alpha'&&page.id==='alpha')return index===0||index===1;if(partId==='drum808')return true;if(page.id==='seq')return true;if(partId==='bass808'&&(page.id==='perf'||(page.id==='env'&&index===2)))return true;return !!bindingPage?.[index]};
+  const pressControl=(index:number)=>{if(globalPage!==null&&WORKSTATION_GLOBAL_PAGES[globalPage].id==='scene'){if(index===2)saveSnapshot();else if(index===3)loadSnapshot();return}if(partId==='alpha'&&page.id==='alpha')return;const label=visiblePage.params[index];if(label==='PLAY')void toggleTransport();else if(label==='TRIGGER')workstation.triggerDrum(drumVoice as Drum808VoiceId,110,true);else if(label==='FILL')[0,1,2].forEach(v=>workstation.triggerDrum(v as Drum808VoiceId,108,true));else if(label==='HIT'||label==='ACCENT'||label==='SLIDE')void adjust(index,1)};
   const functionButton=(label:string)=>{if(label==='SEL')cyclePart();else if(label==='HOME'){setGlobalPage(null);setPageIndex(v=>({...v,[partId]:0}))}else if(label==='ENV')jumpPage('env');else if(label==='LFO')jumpPage(partId==='alpha'?'lfo':'mod');else if(label==='SEQ')jumpPage('seq');else if(label==='ARP')jumpPage('perf');else if(label==='FX')setGlobalPage(1);else if(label==='GLO')setGlobalPage(globalPage===null?0:null);else if(label==='EDIT')setFine(v=>!v);else if(label==='SAVE')saveSnapshot();else if(label==='PLAY/STOP')void toggleTransport()};
 
   const keys=Array.from({length:27},(_,i)=>53+i+octave*12),displayParams=visiblePage.params,stepStrip=page.id==='seq'&&globalPage===null;
   const stepActive=(i:number)=>partId==='mini'?miniLane[i].note>=0:partId==='bass808'?bassPattern.steps[i].note>=0:partId==='drum808'?drumPattern.steps[i].hits!==0:alphaLane[i].chord>=0;
+  const alphaEditActive=partId==='alpha'&&page.id==='alpha'&&globalPage===null;
 
   return <main className="fm1Stage">
     <nav className="workspaceNav" aria-label="FMiniMug1 workspace"><button className={workspaceTab==='editor'?'active':''} onClick={()=>setWorkspaceTab('editor')}>WORKSTATION EDITOR</button><button className={workspaceTab==='device'?'active':''} onClick={()=>setWorkspaceTab('device')}>DEVICE &amp; INSTALL</button></nav>
@@ -294,24 +298,34 @@ export function FM1WorkstationNext(){
           <div className="displayHeader"><b>{globalPage===null?part.title:'GLOBAL'}</b><span>{playing?`▶ ${String(playStep+1).padStart(2,'0')}`:'■ READY'}</span></div>
           <div className="displayScene">{partId==='alpha'&&page.id==='alpha'&&globalPage===null?alphaPreset.name:scene.name}<small>{part.subtitle} · {tempo} BPM · {swing}% SWING · PEAK {(peak*100).toFixed(0)}%</small></div>
           <div className="displayPage"><strong>{visiblePage.title}</strong><span>{partId==='alpha'&&page.id==='alpha'&&globalPage===null?`DIAL ${alphaFocus.toUpperCase()}`:fine?'FINE':'NORMAL'}</span></div>
-          {partId==='alpha'&&page.id==='alpha'&&globalPage===null&&<div className={`alphaDialReadout ${alphaFocus}`}><small>{alphaFocus==='param'?`PARAM ${String(alphaParamIndex+1).padStart(2,'0')}/${ALPHA_DIAL_PARAMS.length}`:'VALUE'}</small><b>{alphaDial.label}</b><strong>{pretty(alphaDial,alphaValues[alphaDial.id])}</strong></div>}
+          {partId==='alpha'&&page.id==='alpha'&&globalPage===null&&<div className={`alphaDialReadout ${alphaFocus}`}><small>{alphaFocus==='param'?`PARAM ${String(alphaParamIndex+1).padStart(2,'0')}/${ALPHA_DIAL_PARAMS.length}`:alphaFocus==='value'?'VALUE':toneModify}</small><b>{alphaDial.label}</b><strong>{pretty(alphaDial,alphaValues[alphaDial.id])}</strong></div>}
           <div className="displayParams">{displayParams.map((name,i)=><div key={`${name}-${i}`} className={available(i)?'':'unavailable'}><small>K{i+1}</small><b>{name}</b><em>{available(i)?controlValue(i):'N/A'}</em></div>)}</div>
           {stepStrip&&<div className="displaySteps">{Array.from({length:16},(_,i)=><span key={i} className={`${stepActive(i)?'on':''} ${i===seqCursor?'cursor':''} ${playing&&i===playStep?'play':''}`}>{i+1}</span>)}</div>}
           <div className="displayFooter"><span className={partId==='mini'?'selected':''}>MINI</span><span className={partId==='drum808'?'selected':''}>808D</span><span className={partId==='bass808'?'selected':''}>808B</span><span className={partId==='alpha'?'selected':''}>ALPHA</span></div>
         </div></div>
-        <div className="fm1RightControls"><div className="fm1KnobRow">{displayParams.map((name,i)=><HardwareKnob key={`${name}-${i}`} label={partId==='alpha'&&page.id==='alpha'&&i===0?'ALPHA DIAL':`KNOB ${i+1}`} value={available(i)?controlValue(i):'N/A'} normalized={controlRatio(i)} alphaDial={partId==='alpha'&&page.id==='alpha'&&i===0} active={partId==='alpha'&&page.id==='alpha'&&i===0&&alphaFocus==='value'} disabled={!available(i)} onDelta={d=>void adjust(i,d)} onPress={()=>pressControl(i)}/>)}</div><div className="fm1FunctionGrid">{['FX','SEL','ENV','LFO','EDIT','GLO','HOME','SAVE','ARP','SEQ','PLAY/STOP','REC'].map(label=>{const disabled=label==='REC'||(label==='ARP'&&partId!=='bass808'&&partId!=='drum808');const active=(label==='PLAY/STOP'&&playing)||(label==='EDIT'&&fine)||(label==='FX'&&globalPage===1)||(label==='GLO'&&globalPage!==null);return <button key={label} disabled={disabled} className={active?'active':disabled?'disabled':''} onClick={()=>functionButton(label)}>{label}</button>})}</div></div>
+        <div className="fm1RightControls"><div className="fm1KnobRow">{displayParams.map((name,i)=><HardwareKnob key={`${name}-${i}`} label={partId==='alpha'&&page.id==='alpha'&&i===0?'ALPHA DIAL':`KNOB ${i+1}`} value={available(i)?controlValue(i):'N/A'} normalized={controlRatio(i)} alphaDial={partId==='alpha'&&page.id==='alpha'&&i===0} active={partId==='alpha'&&page.id==='alpha'&&i===0&&(alphaFocus==='value'||alphaFocus==='modify')} disabled={!available(i)} pressable={!(partId==='alpha'&&page.id==='alpha')} onDelta={d=>void adjust(i,d)} onPress={()=>pressControl(i)}/>)}</div><div className="fm1FunctionGrid">{['FX','SEL','ENV','LFO','EDIT','GLO','HOME','SAVE','ARP','SEQ','PLAY/STOP','REC'].map(label=>{const disabled=label==='REC'||(label==='ARP'&&partId!=='bass808'&&partId!=='drum808');const active=(label==='PLAY/STOP'&&playing)||(label==='EDIT'&&fine)||(label==='FX'&&globalPage===1)||(label==='GLO'&&globalPage!==null);return <button key={label} disabled={disabled} className={active?'active':disabled?'disabled':''} onClick={()=>functionButton(label)}>{label}</button>})}</div></div>
       </div>
       <div className="fm1UpperPads"/>
       <div className="fm1Keybed">{keys.map((note,i)=><button key={`${note}-${i}`} className={held.includes(note)?'held':''} onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);void triggerSource(`ptr:${e.pointerId}`,note,i)}} onPointerUp={e=>{e.preventDefault();releaseSource(`ptr:${e.pointerId}`)}} onPointerCancel={e=>releaseSource(`ptr:${e.pointerId}`)}><i/><small>{partId==='drum808'?DRUM_SHORT[i%8]:`${NOTE_NAMES[note%12]}${Math.floor(note/12)-1}`}</small><kbd>{COMPUTER_KEYS[i]?.replace('Key','').replace('Digit','')??''}</kbd></button>)}</div>
     </section>
-    <section className="fm1Status"><span><b>ALPHA DIAL</b> Turn K1 to select parameters; press K1 to switch PARAM ↔ VALUE. K2 can also select the focus explicitly.</span><span><b>TONE MODIFY</b> Turn K4 for the selected macro. Press K4 to cycle BRILLIANCE / MOD RATE / MOD DEPTH / ENV TIME.</span><span><b>PRESETS</b> K3 browses the modeled 128 P/M factory-bank positions plus original FMiniMug1 ALPHA patches.</span><span><b>CALM DEMOS</b> Default scenes now leave space for filter, envelope, chorus and Alpha-Dial changes instead of filling every 16th note.</span></section>
+    {alphaEditActive&&<section className="alphaJunoControls" aria-label="Alpha Juno editing controls">
+      <div className="alphaModeButtons" role="group" aria-label="Alpha Juno edit mode">
+        <button className={alphaFocus==='param'?'selected':''} aria-pressed={alphaFocus==='param'} onClick={()=>setAlphaFocus('param')}>PARAMETER SELECT</button>
+        <button className={alphaFocus==='value'?'selected':''} aria-pressed={alphaFocus==='value'} onClick={()=>setAlphaFocus('value')}>VALUE</button>
+      </div>
+      <div className="alphaModifyButtons" role="group" aria-label="Tone Modify mode">
+        {MODIFY_NAMES.map((name,index)=><button key={name} className={alphaFocus==='modify'&&modifyIndex===index?'selected':''} aria-pressed={alphaFocus==='modify'&&modifyIndex===index} onClick={()=>{setModifyIndex(index);setAlphaFocus('modify')}}>{name}</button>)}
+      </div>
+      <p>Turn ALPHA DIAL to choose a parameter, change its value, or adjust the selected Tone Modify mode.</p>
+    </section>}
+    <section className="fm1Status"><span><b>ALPHA DIAL</b> Select PARAMETER SELECT or VALUE, then turn ALPHA DIAL. Click a Tone Modify button and turn the same dial to adjust it.</span><span><b>TONE MODIFY</b> MOD RATE, MOD DEPTH, BRILLIANCE and ENV TIME are direct mode selections.</span><span><b>PRESETS</b> K2 or the top PRESETS control browses modeled factory-bank positions and original FMiniMug1 ALPHA patches.</span><span><b>CALM DEMOS</b> Default scenes leave space for filter, envelope, chorus and Alpha-Dial changes.</span></section>
     {message&&<div className={audioState==='error'?'fm1Message error':'fm1Message'}>{message}{audioState==='error'&&<button onClick={()=>void ensureAudio()}>RETRY AUDIO</button>}</div>}
     </>}
   </main>;
 }
 
-function HardwareKnob({label,value,normalized,onDelta,onPress,disabled=false,alphaDial=false,active=false}:{label:string;value:string;normalized:number;onDelta:(delta:number)=>void|Promise<void>;onPress?:()=>void;disabled?:boolean;alphaDial?:boolean;active?:boolean}){
+function HardwareKnob({label,value,normalized,onDelta,onPress,disabled=false,alphaDial=false,active=false,pressable=true}:{label:string;value:string;normalized:number;onDelta:(delta:number)=>void|Promise<void>;onPress?:()=>void;disabled?:boolean;alphaDial?:boolean;active?:boolean;pressable?:boolean}){
   const drag=useRef<{y:number;carry:number;moved:boolean}|null>(null),angle=-135+clamp(normalized,0,1)*270,style={'--knob-angle':`${angle}deg`} as CSSProperties;
   const move=(e:ReactPointerEvent<HTMLButtonElement>)=>{if(!drag.current||disabled)return;const dy=drag.current.y-e.clientY;drag.current.y=e.clientY;drag.current.carry+=dy;while(Math.abs(drag.current.carry)>=5){const dir=drag.current.carry>0?1:-1;drag.current.carry-=dir*5;drag.current.moved=true;void onDelta(dir)}};
-  return <div className={`hardwareKnob ${disabled?'disabled':''} ${alphaDial?'alphaDialKnob':''} ${active?'focused':''}`}><label>{label}</label><button disabled={disabled} style={style} title={disabled?'Unavailable':'Drag/wheel = turn; click = encoder press'} onPointerDown={e=>{if(disabled||e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={y:e.clientY,carry:0,moved:false}}} onPointerMove={move} onPointerUp={e=>{if(!drag.current)return;const moved=drag.current.moved;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}drag.current=null;if(!moved){if(onPress)onPress();else void onDelta(e.shiftKey?-1:1)}}} onPointerCancel={()=>{drag.current=null}} onWheel={e=>{if(disabled)return;e.preventDefault();void onDelta(e.deltaY<0?1:-1)}}><span/></button><small>{value}</small></div>;
+  return <div className={`hardwareKnob ${disabled?'disabled':''} ${alphaDial?'alphaDialKnob':''} ${active?'focused':''}`}><label>{label}</label><button disabled={disabled} style={style} title={disabled?'Unavailable':pressable?'Drag/wheel = turn; click = encoder press':'Drag or use wheel to turn'} onPointerDown={e=>{if(disabled||e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={y:e.clientY,carry:0,moved:false}}} onPointerMove={move} onPointerUp={e=>{if(!drag.current)return;const moved=drag.current.moved;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}drag.current=null;if(!moved&&pressable){if(onPress)onPress();else void onDelta(e.shiftKey?-1:1)}}} onPointerCancel={()=>{drag.current=null}} onWheel={e=>{if(disabled)return;e.preventDefault();void onDelta(e.deltaY<0?1:-1)}}><span/></button><small>{value}</small></div>;
 }

@@ -43,16 +43,24 @@ const alpha=manifest.parts.find(p=>p.id==='alpha');
 if(!alpha)fail('shared manifest has no ALPHA part');
 else{
   const first=alpha.pages?.[0];
-  const expected=['ALPHA DIAL','FOCUS','PRESET','TONE MODIFY'];
+  const expected=['ALPHA DIAL','PRESET','—','—'];
   if(first?.id!=='alpha')fail(`ALPHA first page must be alpha, got ${first?.id}`);
   if(JSON.stringify(first?.params)!==JSON.stringify(expected))fail(`ALPHA main controls drifted: ${JSON.stringify(first?.params)}`);
 }
 
 for(const token of [
-  "type AlphaFocus='param'|'value'",
+  "type AlphaFocus='param'|'value'|'modify'",
   "type ToneModify='BRILLIANCE'|'MOD RATE'|'MOD DEPTH'|'ENV TIME'",
-  "if(index===0||index===1)setAlphaFocus",
-  "setModifyIndex(v=>(v+1)%MODIFY_NAMES.length)",
+  "const MODIFY_NAMES:ToneModify[]=['MOD RATE','MOD DEPTH','BRILLIANCE','ENV TIME']",
+  "const MODIFY_RUNTIME_INDEX=[1,2,0,3] as const",
+  "setAlphaFocus('param')",
+  "setAlphaFocus('value')",
+  "aria-label=\"Alpha Juno editing controls\"",
+  "aria-label=\"Tone Modify mode\"",
+  "setAlphaFocus('modify')",
+  "if(alphaFocus==='param')setAlphaParamIndex",
+  "else if(alphaFocus==='value')changeAlphaValue(delta)",
+  "else applyToneModify(delta)",
   "applyToneModify(delta)",
   "workstation.setAlphaParam",
   "label=\"MASTER\"",
@@ -66,6 +74,10 @@ for(const token of [
   "workstation.play()",
   "workstation.stop()"
 ]) requireText(ui,token,'active virtual FM-1');
+for(const token of [
+  "setAlphaFocus(v=>v==='param'?'value':'param')",
+  'setModifyIndex(v=>(v+1)%MODIFY_NAMES.length)'
+]) forbidText(ui,token,'Alpha Juno controls must select modes directly');
 
 for(const token of [
   'fmw_runtime_set_value',
