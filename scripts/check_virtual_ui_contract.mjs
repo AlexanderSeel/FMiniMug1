@@ -10,6 +10,7 @@ const forbidText=(text,needle,context)=>{if(text.includes(needle))fail(`${contex
 
 const main=read('web/src/main.tsx');
 const ui=read('web/src/FM1WorkstationNext.tsx');
+const uiCss=read('web/src/fm1Next.css');
 const workstation=read('web/src/audio/workstation.ts');
 const runtimeHeader=read('firmware/include/fm_workstation_runtime.h');
 const wasm=read('firmware/wasm/fm_workstation_wasm.c');
@@ -22,6 +23,21 @@ requireText(main,"FM1WorkstationNext",'main entry');
 requireText(main,"./fm1Refined.css",'main entry');
 forbidText(main,"FM1Workstation'",'main entry');
 if(fs.existsSync(path.join(root,'web/src/FM1Workstation.tsx')))fail('obsolete parallel FM1Workstation.tsx must not exist');
+
+for(const token of [
+  "workspaceTab==='device'",
+  'DeviceInstallView',
+  'DOWNLOAD WINDOWS BETA',
+  'DOWNLOAD NON-INSTALLABLE TEST ZIP',
+  'fminimug1-workstation-stress.bin',
+  'CPU LAST / MAX / OVER',
+  'fminimug1-hardware-test-report',
+  'EXPORT TEST REPORT',
+  "RELEASE_TAG?`${RELEASE_BASE}/FMiniMug1-${RELEASE_TAG}-hardware-diagnostics-NON-INSTALLABLE.zip`",
+  'NO .fwsc · NO FLASH BUTTON'
+]) requireText(ui,token,'in-app device and installation view');
+requireText(uiCss,'.workspaceNav','in-app workspace navigation styles');
+requireText(uiCss,'.deviceInstall','in-app device view styles');
 
 const alpha=manifest.parts.find(p=>p.id==='alpha');
 if(!alpha)fail('shared manifest has no ALPHA part');
