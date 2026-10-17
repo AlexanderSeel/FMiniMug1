@@ -212,6 +212,8 @@ Source of truth: `shared/workstation.json`.
 - [ ] Capability/version handshake.
 - [ ] Project import/export.
 - [ ] Hardware USB live sync and hardware installation remain gated on verified physical control mapping, identity checks and stock recovery validation.
+- [x] Device & Install view uses the established FM-1 WebMIDI SysEx query to request read-only device identity, rejects ambiguous multiple-device matches, and reports base firmware vs update-loader identity.
+- [ ] Implement the Felucca-compatible MIDI OTA transfer, package verification and post-reboot identity check only after hardware safety gates pass; keep the write action and `.fwsc` packaging disabled until then.
 
 ## Milestone I — Presets / demos / regression content 🚧
 
@@ -247,7 +249,7 @@ Source of truth: `shared/workstation.json`.
 - [ ] Define quality degradation policy if `OVER` is nonzero, never random underruns.
 - [ ] Build mapped four-part hardware runtime only after physical control IDs and CPU headroom are verified.
 - [ ] Port the four-lane workstation transport from the WASM integration layer into the mapped FM-1 runtime.
-- [ ] Read-only identity validation.
+- [x] Browser read-only identity handshake implemented in the same Device & Install web app; no package is loaded and no firmware bytes are sent.
 - [ ] Validate stock V15 return/recovery path on a real FM-1.
 - [ ] Only after physical controls, CPU `LAST / MAX / OVER`, identity and recovery gates pass, consider installable firmware.
 - [ ] Only then consider `.fwsc` packaging and browser OTA installation.
@@ -268,7 +270,7 @@ Source of truth: `shared/workstation.json`.
 - [x] `v0.3.0-beta.5` published: same-app Device & Install view and first hardware diagnostic report flow; hardware images remain NON-INSTALLABLE.
 - [ ] Validate the packaged Windows installer manually on a clean Windows user profile outside CI.
 - [ ] Add signed/native desktop packaging later if the local-browser launcher proves useful enough.
-- [ ] Add FM-1 browser OTA installer only after the mapped firmware/recovery gates are complete.
+- [ ] Enable FM-1 browser OTA installer only after mapped firmware, measured CPU headroom and stock recovery gates are complete.
 
 ## Current real-target facts
 
@@ -295,7 +297,8 @@ fminimug1-synth-check.bin          # synthetic controls, do not use as mapped fi
 5. Expand calm factory/demo content and add deterministic audio renders.
 6. Use the first beta's in-app diagnostic download/report flow to collect physical FM-1 control IDs and real LAST/MAX/OVER/audio results.
 7. Tune quality/polyphony from measured FM-1 MAX/OVER, then build the first mapped hardware beta.
-8. Only after recovery validation consider installable FM-1 packaging / browser OTA.
+8. After recovery validation, implement and verify the Felucca-compatible WebMIDI OTA transfer, including package checksum/model validation, loader handoff, resume/recovery behavior and returned identity check.
+9. Only after all hardware gates pass may the verified package and browser OTA write action be enabled.
 
 ## Current safety status
 

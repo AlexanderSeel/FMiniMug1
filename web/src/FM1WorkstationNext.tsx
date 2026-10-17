@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 13005)
+Total output lines: 344
+
 import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type PointerEvent as ReactPointerEvent} from 'react';
 import {WORKSTATION_GLOBAL_PAGES,WORKSTATION_PARTS,type WorkstationPartId} from './generated/workstation';
 import {workstation,WORKSTATION_RUNTIME_FIELD,type WorkstationMiniStep,type WorkstationScene} from './audio/workstation';
@@ -7,6 +10,7 @@ import {ALPHA_PARAM,type AlphaParamId,type AlphaPatch} from './audio/alpha';
 import {ALPHA_ALL_PRESETS} from './data/alphaPresets';
 import {PARAM} from './generated/params';
 import {WORKSTATION_SCENES} from './data/workstationScenes';
+import {readFM1Identity,type FM1MidiIdentity} from './audio/fm1MidiIdentity';
 import './fm1Virtual.css';
 import './fm1Next.css';
 
@@ -80,6 +84,9 @@ const RELEASE_BASE=RELEASE_TAG
 type HardwareTestReport={device:string;controlNotes:string;last:number|null;max:number|null;over:number|null;crackles:string;createdAt:string};
 
 function DeviceInstallView(){
+  const [midiState,setMidiState]=useState<'idle'|'connecting'|'connected'|'error'>('idle');
+  const [midiIdentity,setMidiIdentity]=useState<FM1MidiIdentity|null>(null);
+  const [midiMessage,setMidiMessage]=useState('');
   const [report,setReport]=useState<HardwareTestReport>(()=>{
     try{
       const saved=localStorage.getItem('fminimug1-hardware-test-report');
@@ -98,11 +105,20 @@ function DeviceInstallView(){
   };
   const windowsUrl=RELEASE_TAG?`${RELEASE_BASE}/FMiniMug1-${RELEASE_TAG}-windows-beta.zip`:'https://github.com/AlexanderSeel/FMiniMug1/releases';
   const hardwareUrl=RELEASE_TAG?`${RELEASE_BASE}/FMiniMug1-${RELEASE_TAG}-hardware-diagnostics-NON-INSTALLABLE.zip`:'https://github.com/AlexanderSeel/FMiniMug1/releases';
+  const connectFM1=async()=>{
+    setMidiState('connecting');setMidiIdentity(null);setMidiMessage('Requesting USB MIDI access…');
+    try{
+      const identity=await readFM1Identity();
+      setMidiIdentity(identity);setMidiState('connected');
+      setMidiMessage(identity.isUpdateLoader?'Update loader detected. Read-only identity check complete.':'FM-1 identity read successfully. No firmware data was sent.');
+      update('device',`${identity.product} · ${identity.portName}`);
+    }catch(error){setMidiState('error');setMidiMessage(error instanceof Error?error.message:'Could not read FM-1 identity.');}
+  };
   return <section className="deviceInstall">
     <header className="deviceInstallHeader"><div><small>FM-1 · BETA TOOLS</small><h1>Device &amp; Install</h1><p>Install the virtual workstation and collect the first FM-1 hardware test results from this app.</p></div><strong>{RELEASE_TAG||'SOURCE BUILD'}</strong></header>
     <div className="installCards">
       <article className="installCard"><small>VIRTUAL WORKSTATION</small><h2>Install the editor</h2><p>The Windows package installs this same web app locally. It includes the native C workstation compiled to WASM and needs no Node.js or Python after installation.</p><a className="installAction" href={windowsUrl} target="_blank" rel="noreferrer">DOWNLOAD WINDOWS BETA</a><a className="subtleLink" href="https://github.com/AlexanderSeel/FMiniMug1/releases" target="_blank" rel="noreferrer">All beta releases</a></article>
-      <article className="installCard hardwareCard"><small>REAL FM-1 · DIAGNOSTICS ONLY</small><h2>First hardware test</h2><p>These verified target images gather control IDs and measure audio headroom. They are not firmware installers and are not declared safe to flash.</p><a className="installAction secondaryAction" href={hardwareUrl} target="_blank" rel="noreferrer">DOWNLOAD NON-INSTALLABLE TEST ZIP</a><div className="noFlashNotice"><b>NO .fwsc · NO FLASH BUTTON</b><span>Use only the established FM-1 diagnostic loading method for your test device. Do not use the virtual-app installer for these files.</span></div></article>
+      <article className="installCard hardwareCard"><small>REAL FM-1 · WEBMIDI OTA PREPARATION</small><h2>Connect the FM-1</h2><p>This uses the FM-1 USB MIDI identity query used by the OTA updater. It checks the connected device in this same app and sends no firmware data.</p><button className="installAction secondaryAction" onClick={()=>void connectFM1()} disabled={midiState==='connecting'}>{midiState==='connecting'?'CHECKING DEVICE…':'CONNECT & READ IDENTITY'}</button>{midiMessage&&<div className={`midiIdentity ${midiState}`} role="status" aria-live="polite"><b>{midiIdentity?.product??(midiState==='error'?'IDENTITY CHECK FAILED':midiState==='connecting'?'WAITING FOR DEVICE':'READ-ONLY DEVICE CHECK')}</b><span>{midiMessage}</span>{midiIdentity&&<small>{midiIdentity.portName} · firmware {midiIdentity.version}{midiIdentity.isUpdateLoader?' · update loader':''}</small>}</div>}<a className="subtleLink" href={hardwareUrl} target="_blank" rel="noreferrer">DOWNLOAD NON-INSTALLABLE TEST ZIP</a><div className="noFlashNotice"><b>OTA WRITE IS GATED</b><span>The MIDI identity check is active. Firmware transfer remains disabled until physical controls, CPU LAST / MAX / OVER and stock V15 recovery are validated. No .fwsc package is available.</span></div></article>
     </div>
     <article className="hardwareSteps"><div><small>TEST ORDER</small><h2>Run one stage at a time</h2></div><ol><li><b>Raw controls:</b> run <code>fminimug1-diag.bin</code>; record each physical button/encoder ID below.</li><li><b>Audio baseline:</b> run <code>fminimug1-audio-check.bin</code>; listen for crackles and record CPU LAST / MAX / OVER.</li><li><b>Workstation load:</b> run <code>fminimug1-workstation-stress.bin</code> (MINI ×2, 808 DRUM, 808 BASS, six ALPHA voices + chorus); require OVER = 0.</li><li><b>Send results:</b> save the report JSON and share its readings before we map controls or make installable firmware.</li></ol><p className="gateText">Control mapping, real-device CPU/underrun results and stock V15 recovery validation remain required before installable firmware or .fwsc packaging.</p></article>
     <article className="hardwareReport"><div><small>LOCAL TEST NOTES</small><h2>Hardware report</h2><p>Draft saves in this browser only. Export creates a JSON file you can attach to a project issue.</p></div><div className="reportGrid">
@@ -200,22 +216,7 @@ export function FM1WorkstationNext(){
   },[alphaValues,ambienceMix,bassValues,delayMix,drumAccent,drumDrive,drumKit,drumMuted,master,masterDrive,miniValues,partLevels,pushSequence]);
 
   const setAlphaParams=(patch:Record<number,number>)=>{setAlphaValues(v=>({...v,...patch}));for(const [id,value] of Object.entries(patch))workstation.setAlphaParam(+id as AlphaParamId,value)};
-  const changeAlphaValue=(delta:number)=>{const current=alphaValues[alphaDial.id]??alphaDial.initial;let value=clamp(current+delta*alphaDial.step*(fine?.25:1),alphaDial.min,alphaDial.max);if(alphaDial.kind)value=Math.round(value);setAlphaParams({[alphaDial.id]:value})};
-  const applyAlphaPreset=async(next:number)=>{const index=(next+ALPHA_ALL_PRESETS.length)%ALPHA_ALL_PRESETS.length,preset:AlphaPatch=ALPHA_ALL_PRESETS[index];setAlphaPresetIndex(index);setModifyAmount([0,0,0,0]);const values={...initialAlphaValues(),...preset.values};setAlphaValues(values);if(await ensureAudio())for(const [id,v] of Object.entries(values))workstation.setAlphaParam(+id as AlphaParamId,v)};
-  const applyToneModify=(delta:number)=>{
-    const params=toneModify==='BRILLIANCE'?[ALPHA_PARAM.cutoff,ALPHA_PARAM.hpf,ALPHA_PARAM.resonance]:toneModify==='MOD RATE'?[ALPHA_PARAM.lfoRate,ALPHA_PARAM.pwmRate]:toneModify==='MOD DEPTH'?[ALPHA_PARAM.dcoMod,ALPHA_PARAM.vcfMod,ALPHA_PARAM.pwmDepth]:[ALPHA_PARAM.attack,ALPHA_PARAM.decay,ALPHA_PARAM.release];
-    void workstation.applyAlphaToneModify(delta,MODIFY_RUNTIME_INDEX[modifyIndex],params).then(({amount,values})=>{
-      setAlphaValues(current=>({...current,...Object.fromEntries(params.map((id,index)=>[id,values[index]]))}));
-      setModifyAmount(current=>{const next=[...current] as [number,number,number,number];next[modifyIndex]=clamp(Math.round(amount*8),-8,8);return next});
-    }).catch(error=>setMessage(`Tone Modify failed: ${String(error)}`));
-  };
-
-  const releaseSource=useCallback((source:string)=>{const entry=activeRef.current.get(source);if(!entry)return;activeRef.current.delete(source);if(entry.part==='mini')workstation.miniNoteOff(entry.note);else if(entry.part==='alpha')workstation.alphaNoteOff(entry.note);else if(entry.part==='bass808'){const remaining=[...activeRef.current.values()].filter(v=>v.part==='bass808');if(remaining.length)workstation.bassNoteOn(remaining.at(-1)!.note);else workstation.bassNoteOff()}setHeld([...new Set([...activeRef.current.values()].map(v=>v.note))])},[]);
-  const triggerSource=useCallback(async(source:string,note:number,index:number)=>{if(activeRef.current.has(source)||!await ensureAudio())return;const p=partRef.current;activeRef.current.set(source,{note,part:p});if(p==='mini')workstation.miniNoteOn(note,104);else if(p==='alpha')workstation.alphaNoteOn(note,96);else if(p==='bass808')workstation.bassNoteOn(note);else workstation.triggerDrum((index%8) as Drum808VoiceId,104,false);setHeld([...new Set([...activeRef.current.values()].map(v=>v.note))])},[ensureAudio]);
-  useEffect(()=>{const down=(e:KeyboardEvent)=>{const target=e.target as HTMLElement|null;if(target?.matches('input,textarea,select,[contenteditable="true"]'))return;const i=COMPUTER_KEYS.indexOf(e.code);if(i<0||e.repeat)return;e.preventDefault();void triggerSource(`kbd:${e.code}`,53+i+octave*12,i)};const up=(e:KeyboardEvent)=>{if(activeRef.current.has(`kbd:${e.code}`)){e.preventDefault();releaseSource(`kbd:${e.code}`)}};window.addEventListener('keydown',down);window.addEventListener('keyup',up);return()=>{window.removeEventListener('keydown',down);window.removeEventListener('keyup',up)}},[octave,releaseSource,triggerSource]);
-
-  const runtimeScene=():WorkstationScene=>({...scene,bpm:tempo,swing,bassPattern:{...bassPattern,bpm:tempo,swing},drumPattern:{...drumPattern,bpm:tempo,swing},bassPatch:{...scene.bassPatch,values:{...bassValues}},alphaPatch:{...scene.alphaPatch,values:{...alphaValues}}});
-  const loadScene=async(next:number)=>{const index=(next+WORKSTATION_SCENES.length)%WORKSTATION_SCENES.length,s=WORKSTATION_SCENES[index],bp=cloneBass(index),dp=cloneDrums(index),ml=createMiniLane(index),al=createAlphaLane(index),wasPlaying=playing;if(wasPlaying)workstation.stop();setSceneIndex(index);setTempo(s.bpm);setSwing(s.swing);setBassPattern(bp);setDrumPattern(dp);setMiniLane(ml);setAlphaLane(al);setBassValues({...initialValues(BASS),...s.bassPatch.values});setAlphaValues(v=>({...v,...s.alphaPatch.values}));setModifyAmount([0,0,0,0]);if(await ensureAudio()){workstation.setSceneIndex(index);await workstation.loadScene(s);pushSequence(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
+  const changeAlphaValue=(delta:number)=>{const current=alphaValues[alphaDial.id]??alphaDial.initial;let …1005 tokens truncated…ce(ml,bp,dp,al,s.bpm,s.swing);if(wasPlaying)workstation.play()}};
   const toggleTransport=async()=>{if(playing){workstation.stop();setPlaying(false);return}if(!await ensureAudio())return;await workstation.loadScene(runtimeScene());pushSequence();workstation.play();setPlaying(true)};
   const changePart=(next:WorkstationPartId)=>{for(const source of [...activeRef.current.keys()])releaseSource(source);setGlobalPage(null);setPartId(next)};
   const cyclePart=(delta=1)=>changePart(PARTS[(PARTS.indexOf(partId)+delta+PARTS.length)%PARTS.length]);

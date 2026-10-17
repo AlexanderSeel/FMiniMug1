@@ -12,6 +12,7 @@ const main=read('web/src/main.tsx');
 const ui=read('web/src/FM1WorkstationNext.tsx');
 const uiCss=read('web/src/fm1Next.css');
 const workstation=read('web/src/audio/workstation.ts');
+const midiIdentity=read('web/src/audio/fm1MidiIdentity.ts');
 const runtimeHeader=read('firmware/include/fm_workstation_runtime.h');
 const wasm=read('firmware/wasm/fm_workstation_wasm.c');
 const worklet=read('web/public/dsp/fminimug1-worklet.js');
@@ -34,10 +35,16 @@ for(const token of [
   'fminimug1-hardware-test-report',
   'EXPORT TEST REPORT',
   "RELEASE_TAG?`${RELEASE_BASE}/FMiniMug1-${RELEASE_TAG}-hardware-diagnostics-NON-INSTALLABLE.zip`",
-  'NO .fwsc · NO FLASH BUTTON'
+  'OTA WRITE IS GATED',
+  'CONNECT & READ IDENTITY',
+  'No .fwsc package is available.'
 ]) requireText(ui,token,'in-app device and installation view');
 requireText(uiCss,'.workspaceNav','in-app workspace navigation styles');
 requireText(uiCss,'.deviceInstall','in-app device view styles');
+for(const token of ['IDENTITY_QUERY','requestMIDIAccess({ sysex: true })','More than one possible FM-1 MIDI device'])
+  requireText(midiIdentity,token,'read-only FM-1 WebMIDI identity handshake');
+for(const token of ['UPGRADE','write(','install('])
+  forbidText(midiIdentity,token,'identity module must remain read-only');
 
 const alpha=manifest.parts.find(p=>p.id==='alpha');
 if(!alpha)fail('shared manifest has no ALPHA part');
