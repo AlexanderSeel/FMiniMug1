@@ -188,6 +188,9 @@ Source of truth: `shared/workstation.json`.
 - [x] Web/WASM production build verifies the four-lane exports and AudioWorklet bundle.
 - [x] Windows beta installer package installs the prebuilt WASM app without Emscripten/source checkout.
 - [x] Installed beta launcher serves the app over localhost and creates desktop/start-menu shortcuts.
+- [x] The editor, virtual-app download, hardware diagnostic download and hardware-test report live in one Device & Install view inside the workstation web app.
+- [x] Beta build injects its exact release tag so in-app downloads point at the matching Windows installer and NON-INSTALLABLE hardware test ZIP.
+- [x] Hardware test report saves locally and exports device/control notes plus CPU LAST / MAX / OVER and audio observations as JSON.
 - [x] Refined virtual-device geometry keeps the FM-1 display/control/keybed proportions compact instead of using the oversized legacy web surface.
 - [x] Lightweight Virtual-FM1 CI contract checks active surface, 27-key map, Alpha-Dial/Tone-Modify hooks, physical labels and transport hooks.
 - [ ] Pixel-identical native 240×240 UI rendered to WASM/canvas.
@@ -207,6 +210,7 @@ Source of truth: `shared/workstation.json`.
 - [ ] Hardware live sync via SysEx/USB-MIDI.
 - [ ] Capability/version handshake.
 - [ ] Project import/export.
+- [ ] Hardware USB live sync and hardware installation remain gated on verified physical control mapping, identity checks and stock recovery validation.
 
 ## Milestone I — Presets / demos / regression content 🚧
 
@@ -260,6 +264,7 @@ Source of truth: `shared/workstation.json`.
 - [x] Windows GitHub Actions smoke test installs the package, serves it on localhost, verifies COOP/COEP + WASM MIME and rejects a tampered package.
 - [x] `v0.3.0-beta.3` is the first release with the hardened checksum-verifying installer and verified Alpha-Dial/Tone-Modify workstation path.
 - [x] `v0.3.0-beta.4` adds the self-contained Windows virtual installer and install/upgrade/uninstall smoke verification.
+- [ ] `v0.3.0-beta.5` candidate: same-app Device & Install view and first hardware diagnostic report flow; hardware images remain NON-INSTALLABLE.
 - [ ] Validate the packaged Windows installer manually on a clean Windows user profile outside CI.
 - [ ] Add signed/native desktop packaging later if the local-browser launcher proves useful enough.
 - [ ] Add FM-1 browser OTA installer only after the mapped firmware/recovery gates are complete.
@@ -282,15 +287,15 @@ fminimug1-synth-check.bin          # synthetic controls, do not use as mapped fi
 
 ## Immediate implementation order
 
-1. Add full browser E2E interaction tests around the now-single Virtual-FM1 surface.
+1. Add full browser E2E interaction tests around the now-single Virtual-FM1 and Device & Install views.
 2. Move mixer/scene/transport lane state into a portable native workstation runtime shared by WASM and the future hardware runtime.
 3. Add independent per-part pattern length/paging and then probability/motion data.
 4. Compile the native 240×240 renderer to WASM/canvas.
 5. Expand calm factory/demo content and add deterministic audio renders.
-6. Verify physical FM-1 control IDs and run the V2 workstation stress image.
+6. Use the first beta's in-app diagnostic download/report flow to collect physical FM-1 control IDs and real LAST/MAX/OVER/audio results.
 7. Tune quality/polyphony from measured FM-1 MAX/OVER, then build the first mapped hardware beta.
 8. Only after recovery validation consider installable FM-1 packaging / browser OTA.
 
 ## Current safety status
 
-The new V2 architecture is the active development path. Legacy dual-MINI Studio code remains only as a temporary regression path and should be removed after the V2 hardware mixer/runtime replaces it. The Windows beta installer installs only the virtual WASM workstation. Flash writes remain disabled and no `.fwsc` should be produced until physical-device control, CPU and recovery gates are complete.
+The new V2 architecture is the active development path. Legacy dual-MINI Studio code remains only as a temporary regression path and should be removed after the V2 hardware mixer/runtime replaces it. The Windows beta installer installs only the virtual WASM workstation. Its Device & Install view links the exact beta's Windows installer and hardware diagnostic ZIP and collects a local JSON hardware report. Flash writes remain disabled and no `.fwsc` should be produced until physical-device control, CPU and recovery gates are complete.

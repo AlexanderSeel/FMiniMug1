@@ -97,6 +97,8 @@ jobs:
       - name: Build exact Web/WASM beta
         if: steps.beta.outputs.publish == 'true'
         working-directory: web
+        env:
+          VITE_RELEASE_TAG: ${{ steps.beta.outputs.tag }}
         run: |
           npm ci
           npm run build
@@ -130,6 +132,8 @@ jobs:
 
           The installed application runs locally in your browser and uses the
           same native C DSP compiled to WASM for MINI, 808 DRUM, 808 BASS and ALPHA.
+          The Device & Install tab inside the app links this release's installer
+          and hardware diagnostic ZIP and includes a local test-report form.
 
           IMPORTANT HARDWARE STATUS
           -------------------------
@@ -148,6 +152,7 @@ jobs:
                   'commit':commit,
                   'virtual_installer':True,
                   'hardware_installable':False,
+                  'in_app_device_test_view':True,
                   'hardware_flash_package':None,
                   'engines':['MINI','808 DRUM','808 BASS','ALPHA'],
                   'runtime':'native C DSP via WASM'
@@ -223,6 +228,7 @@ jobs:
           - ALPHA Dial workflow with PARAM/VALUE focus and Tone Modify macros
           - native delay / ambience / master drive
           - checksum-verifying Windows one-call installer package
+          - in-app Device & Install view with exact-release downloads and hardware test report export
 
           ### Windows install
           Download \`FMiniMug1-${TAG}-windows-beta.zip\`, extract it and double-click:
@@ -233,6 +239,8 @@ jobs:
 
           ### Hardware diagnostics
           \`FMiniMug1-${TAG}-hardware-diagnostics-NON-INSTALLABLE.zip\` contains the verified target diagnostics from the same commit.
+
+          The Device & Install view inside the app links this exact ZIP and provides the ordered raw-control, audio-baseline and workstation-load test checklist plus a JSON report form.
 
           **Those files are not an FM-1 firmware installer and are not declared safe to flash. No .fwsc is included.** A real hardware installer will only be enabled after physical control mapping, CPU/OVER testing and recovery validation are complete.
           EOF
